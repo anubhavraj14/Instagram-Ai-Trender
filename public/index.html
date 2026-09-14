@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reel Studio · Trends & Viral Scripts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">◎</div>
+      <div>
+        <h1>Reel Studio</h1>
+        <p id="niche" class="niche">Loading your niche…</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-view="trends">🔥 Trend Radar</button>
+      <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
+      <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
+    </nav>
+    <div class="actions">
+      <span id="meta" class="meta"></span>
+      <button id="refresh" class="btn">↻ Refresh</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- TRENDS VIEW -->
+    <div id="view-trends" class="view">
+      <section id="status" class="status"></section>
+      <section id="top" class="top hidden">
+        <h2 class="section-title">🔥 Top 3 Reel opportunities for today</h2>
+        <div id="topCards" class="top-grid"></div>
+      </section>
+      <section id="feed" class="hidden">
+        <div class="feed-head">
+          <h2 class="section-title">All findings</h2>
+          <div id="filters" class="filters">
+            <button class="chip active" data-filter="ALL">All</button>
+            <button class="chip post" data-filter="POST NOW">Post now</button>
+            <button class="chip watch" data-filter="WATCH">Watch</button>
+            <button class="chip ignore" data-filter="IGNORE">Ignore</button>
+          </div>
+        </div>
+        <div id="cards" class="cards"></div>
+      </section>
+    </div>
+
+    <!-- VIRAL VIEW -->
+    <div id="view-viral" class="view hidden">
+      <section id="viralStatus" class="status"></section>
+      <section id="viralTop" class="top hidden">
+        <h2 class="section-title">🚀 Top 3 viral bets to make now</h2>
+        <div id="viralTopCards" class="top-grid"></div>
+      </section>
+      <section id="viralFeed" class="hidden">
+        <h2 class="section-title">Viral reel blueprints <span class="subtle">— original vs. your improved version</span></h2>
+        <div id="viralCards" class="cards"></div>
+      </section>
+    </div>
+
+    <!-- SAVED VIEW -->
+    <div id="view-saved" class="view hidden">
+      <h2 class="section-title">⭐ Saved ideas</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Your bookmarked ideas & scripts, stored on this device.</p>
+      <div id="savedCards" class="cards"></div>
+    </div>
+  </main>
+
+  <!-- TREND card template -->
+  <template id="cardTpl">
+    <article class="card">
+      <div class="card-top">
+        <span class="rank"></span>
+        <span class="category"></span>
+        <span class="novelty"></span>
+        <span class="fresh"></span>
+        <button class="save-btn" type="button" title="Save idea">☆</button>
+      </div>
+      <h3 class="card-title"></h3>
+      <div class="rows">
+        <div class="row"><span class="k">What changed</span><p class="v whatChanged"></p></div>
+        <div class="row"><span class="k">Why care</span><p class="v whyCare"></p></div>
+        <div class="row"><span class="k">Timing</span><p class="v timing"></p></div>
+        <div class="row"><span class="k">Adapt to your niche</span><p class="v howToAdapt"></p></div>
+      </div>
+      <div class="reel">
+        <div class="reel-label">🎬 Reel concept</div>
+        <p class="hook"></p>
+        <p class="visual"><span class="k">Visual</span> <span class="visual-txt"></span></p>
+        <p class="cta"><span class="k">CTA</span> <span class="cta-txt"></span></p>
+      </div>
+      <div class="script-slot"></div>
+      <div class="sources"></div>
+    </article>
+  </template>
+
+  <!-- VIRAL blueprint template -->
+  <template id="viralTpl">
+    <article class="card">
+      <div class="card-top">
+        <span class="rank success"></span>
+        <span class="category format"></span>
+        <button class="save-btn" type="button" title="Save idea">☆</button>
+      </div>
+      <h3 class="card-title"></h3>
+      <div class="rows">
+        <div class="row"><span class="k">Why it works</span><p class="v whyItWorks"></p></div>
+        <div class="row"><span class="k">Success signals</span><p class="v successSignals"></p></div>
+        <div class="row"><span class="k">Used by</span><p class="v exampleCreators"></p></div>
+      </div>
+      <div class="whatsDiff">
+        <span class="k">✨ What makes your version different</span>
+        <p class="whatsDiff-txt"></p>
+      </div>
+      <div class="two-scripts">
+        <div class="orig-slot"></div>
+        <div class="improved-slot"></div>
+      </div>
+      <div class="sources"></div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

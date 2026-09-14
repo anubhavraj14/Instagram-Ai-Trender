@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: reel-studio
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: APP_PASSCODE
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: CREATOR_NICHE
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
