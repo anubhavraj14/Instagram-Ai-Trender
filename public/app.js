@@ -1,6 +1,6 @@
 const $ = (s, r = document) => r.querySelector(s);
 
-const state = { view: "trends", trends: null, viral: null, filter: "ALL" };
+const state = { view: "trends", trends: null, viral: null, plan: null, filter: "ALL" };
 
 // Saved list is synced to the server (Upstash) and cached locally for offline/instant use.
 let savedCache = [];
@@ -244,6 +244,24 @@ function buildViralCard(b) {
   return card;
 }
 
+function buildPlanCard(d) {
+  const node = $("#planTpl").content.cloneNode(true);
+  const card = node.querySelector(".card");
+  node.querySelector(".day-badge").textContent = d.day || "";
+  node.querySelector(".pillar").textContent = d.pillar || "";
+  node.querySelector(".format").textContent = d.format || "";
+  const goal = node.querySelector(".goal");
+  goal.textContent = d.goal ? `🎯 ${d.goal}` : "";
+  node.querySelector(".card-title").textContent = d.title || "";
+  node.querySelector(".day-why").textContent = d.why || "";
+  const slot = node.querySelector(".script-slot");
+  if (d.script && (d.script.hook || (d.script.lines && d.script.lines.length))) {
+    slot.appendChild(buildScriptEl(d.script, { label: "📝 Hinglish script", title: d.title }));
+  } else slot.remove();
+  wireSave(node.querySelector(".save-btn"), { id: d.id, type: "plan", title: `${d.day}: ${d.title}`, data: d });
+  return card;
+}
+
 /* ---------- top-3 ---------- */
 function renderTop(container, picks, items, badgeKey) {
   const byId = Object.fromEntries((items || []).map((x) => [x.id, x]));
@@ -308,6 +326,22 @@ function renderViral(data) {
   setMeta(data);
 }
 
+function renderPlan(data) {
+  $("#planSummary").textContent = data.summary || "";
+  const pillars = $("#planPillars");
+  pillars.innerHTML = (data.pillars || []).map((p) => `<span class="pillar-chip">${esc(p)}</span>`).join("");
+  show("#planHead");
+  const days = $("#planDays");
+  days.innerHTML = "";
+  (data.days || []).forEach((d) => days.appendChild(buildPlanCard(d)));
+  const tips = data.tips || [];
+  if (tips.length) {
+    $("#planTipsList").innerHTML = tips.map((t) => `<li>${esc(t)}</li>`).join("");
+    show("#planTips");
+  } else hide("#planTips");
+  setMeta(data);
+}
+
 function renderSaved() {
   const wrap = $("#savedCards");
   wrap.innerHTML = "";
@@ -325,7 +359,10 @@ function renderSaved() {
     return;
   }
   savedCache.forEach((item) => {
-    const card = item.type === "viral" ? buildViralCard(item.data) : buildTrendCard(item.data);
+    let card;
+    if (item.type === "viral") card = buildViralCard(item.data);
+    else if (item.type === "plan") card = buildPlanCard(item.data);
+    else card = buildTrendCard(item.data);
     wrap.appendChild(card);
   });
 }
@@ -364,14 +401,30 @@ async function loadViral(force = false) {
   }
 }
 
+async function loadPlan(force = false) {
+  $("#planStatus").innerHTML = loadingHtml("plan");
+  hide("#planHead"); hide("#planTips"); $("#planDays").innerHTML = "";
+  try {
+    const res = await fetch(`/api/plan${force ? "?force=1" : ""}`);
+    const data = await res.json();
+    if (!res.ok) { $("#planStatus").innerHTML = errorHtml(data); return; }
+    state.plan = data;
+    $("#planStatus").innerHTML = "";
+    renderPlan(data);
+  } catch {
+    $("#planStatus").innerHTML = errorHtml({ error: "Could not reach the server. Is it running?" });
+  }
+}
+
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   $("#refresh").style.display = view === "saved" ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
+  if (view === "plan" && !state.plan) loadPlan(false);
   if (view === "saved") renderSaved();
   if (view !== "saved") $("#meta").textContent = "";
 }
@@ -383,6 +436,7 @@ document.querySelectorAll(".nav-btn").forEach((b) =>
 $("#refresh").addEventListener("click", () => {
   if (state.view === "trends") loadTrends(true);
   else if (state.view === "viral") loadViral(true);
+  else if (state.view === "plan") loadPlan(true);
 });
 $("#filters").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");

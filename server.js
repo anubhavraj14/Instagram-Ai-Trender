@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { researchTrends, researchViral } from "./lib/gemini.js";
+import { researchTrends, researchViral, researchPlan } from "./lib/gemini.js";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
 import { getSavedList, setSavedList, storageMode } from "./lib/storage.js";
 
@@ -58,6 +58,7 @@ app.get("/api/config", (_req, res) =>
 );
 app.get("/api/trends", makeCachedRoute("Trends", researchTrends));
 app.get("/api/viral", makeCachedRoute("Viral", researchViral));
+app.get("/api/plan", makeCachedRoute("Plan", researchPlan));
 
 // Login just validates the passcode (client then stores it and sends it as a header).
 app.post("/api/login", (req, res) => {

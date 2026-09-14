@@ -21,6 +21,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-view="trends">🔥 Trend Radar</button>
       <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
+      <button class="nav-btn" data-view="plan">🗓️ 7-Day Plan</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
     </nav>
     <div class="actions">
@@ -64,10 +65,25 @@
       </section>
     </div>
 
+    <!-- PLAN VIEW -->
+    <div id="view-plan" class="view hidden">
+      <section id="planStatus" class="status"></section>
+      <section id="planHead" class="hidden">
+        <h2 class="section-title">🗓️ Your 7-day content plan</h2>
+        <p id="planSummary" class="summary"></p>
+        <div id="planPillars" class="pillars"></div>
+      </section>
+      <div id="planDays" class="cards"></div>
+      <section id="planTips" class="tips hidden">
+        <h3 class="tips-title">💡 This week's consistency tips</h3>
+        <ul id="planTipsList"></ul>
+      </section>
+    </div>
+
     <!-- SAVED VIEW -->
     <div id="view-saved" class="view hidden">
       <h2 class="section-title">⭐ Saved ideas</h2>
-      <p class="subtle" style="margin:-6px 0 18px">Your bookmarked ideas & scripts, stored on this device.</p>
+      <p class="subtle" style="margin:-6px 0 18px">Your bookmarked ideas & scripts, synced across all your devices.</p>
       <div id="savedCards" class="cards"></div>
     </div>
   </main>
@@ -123,6 +139,22 @@
         <div class="improved-slot"></div>
       </div>
       <div class="sources"></div>
+    </article>
+  </template>
+
+  <!-- PLAN day template -->
+  <template id="planTpl">
+    <article class="card">
+      <div class="card-top">
+        <span class="day-badge"></span>
+        <span class="category pillar"></span>
+        <span class="category format"></span>
+        <span class="goal"></span>
+        <button class="save-btn" type="button" title="Save idea">☆</button>
+      </div>
+      <h3 class="card-title"></h3>
+      <p class="day-why subtle"></p>
+      <div class="script-slot"></div>
     </article>
   </template>
 
