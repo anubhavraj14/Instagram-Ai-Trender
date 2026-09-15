@@ -295,9 +295,16 @@ cp .env.example .env
 }
 
 /* ---------- view renderers ---------- */
+function liveNotice(data) {
+  if (data.liveData === false) {
+    return `<p class="notice">⚡ Live news/Reddit sources weren't reachable from the server, so these are AI-generated from recent knowledge (not last-24h verified). They're still useful — just double-check anything time-sensitive.</p>`;
+  }
+  return "";
+}
+
 function renderTrends(data) {
-  $("#status").innerHTML = data.summary
-    ? `<p class="summary">${esc(data.summary)}</p>` : "";
+  $("#status").innerHTML = liveNotice(data) +
+    (data.summary ? `<p class="summary">${esc(data.summary)}</p>` : "");
   renderTop($("#topCards"), data.topThree, data.findings, "ranking");
   show("#top");
   renderTrendCards();
@@ -316,7 +323,8 @@ function renderTrendCards() {
 }
 
 function renderViral(data) {
-  $("#viralStatus").innerHTML = data.summary ? `<p class="summary">${esc(data.summary)}</p>` : "";
+  $("#viralStatus").innerHTML = liveNotice(data) +
+    (data.summary ? `<p class="summary">${esc(data.summary)}</p>` : "");
   renderTop($("#viralTopCards"), data.topThree, data.blueprints, "successLevel");
   show("#viralTop");
   const cards = $("#viralCards");

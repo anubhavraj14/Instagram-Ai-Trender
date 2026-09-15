@@ -4,14 +4,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { researchTrends, researchViral, researchPlan } from "./lib/gemini.js";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
-import { getSavedList, setSavedList, storageMode } from "./lib/storage.js";
+import { getSavedList, setSavedList, getCache, setCache, storageMode } from "./lib/storage.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NICHE = process.env.CREATOR_NICHE || DEFAULT_NICHE;
 const PASSCODE = process.env.APP_PASSCODE || "";
-const CACHE_MS = 1000 * 60 * 30; // 30 minutes
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(join(__dirname, "public")));
@@ -24,25 +23,32 @@ function requirePass(req, res, next) {
   return res.status(401).json({ error: "Invalid or missing passcode", code: "AUTH" });
 }
 
-// Generic cache + request-coalescing wrapper so refreshes don't re-run slow research.
+// Persistent cache + request-coalescing wrapper.
+// Content is generated once and stored (in Upstash), then served on every visit —
+// even after the server sleeps/restarts. It ONLY regenerates when ?force=1 (Refresh button).
 function makeCachedRoute(name, worker) {
-  const state = { data: null, at: 0, inflight: null };
+  const key = name.toLowerCase();
+  let inflight = null;
   return async (req, res) => {
     const force = req.query.force === "1";
-    const fresh = state.data && Date.now() - state.at < CACHE_MS;
-    if (fresh && !force) {
-      return res.json({ ...state.data, cached: true, cachedAt: state.at });
-    }
     try {
-      if (!state.inflight) {
-        state.inflight = worker(NICHE).finally(() => {
-          state.inflight = null;
-        });
+      if (!force) {
+        const cached = await getCache(key).catch(() => null);
+        if (cached) return res.json({ ...cached, cached: true });
       }
-      const data = await state.inflight;
-      state.data = data;
-      state.at = Date.now();
-      res.json({ ...data, cached: false, cachedAt: state.at });
+      if (!inflight) {
+        inflight = worker(NICHE)
+          .then(async (data) => {
+            const stored = { ...data, cachedAt: Date.now() };
+            await setCache(key, stored).catch((e) => console.warn(`cache save failed: ${e.message}`));
+            return stored;
+          })
+          .finally(() => {
+            inflight = null;
+          });
+      }
+      const data = await inflight;
+      res.json({ ...data, cached: false });
     } catch (err) {
       console.error(`${name} failed:`, err.message);
       res.status(err.code === "NO_API_KEY" ? 400 : 500).json({
