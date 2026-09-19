@@ -537,7 +537,7 @@ async function slideCanvas(slide, i, total) {
     ctx.font = `800 ${hSize}px Inter, system-ui, sans-serif`;
     hLines = wrapLines(ctx, slide.heading || "", maxW).slice(0, 4);
     ctx.font = `500 ${bSize}px Inter, system-ui, sans-serif`;
-    bLines = slide.body ? wrapLines(ctx, slide.body, maxW).slice(0, 2) : [];
+    bLines = slide.body ? wrapLines(ctx, slide.body, maxW).slice(0, 4) : [];
     blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   };
   measure();
