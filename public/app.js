@@ -871,9 +871,9 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = view === "saved" ? "none" : "";
+  $("#refresh").style.display = (view === "saved" || view === "editor") ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
@@ -917,3 +917,106 @@ fetch("/api/config")
   .catch(() => {});
 
 loadTrends(false);
+
+/* ---------- Reel Editor ---------- */
+const editor = { jobId: null, file: null, poll: null };
+const showEl = (el) => el.classList.remove("hidden");
+const editorStatus = (html) => { $("#editorStatus").innerHTML = html; };
+
+function resetEditorOutput() {
+  hide("#editorDownload");
+  hide("#editorTranscriptWrap");
+  editorStatus("");
+}
+
+async function uploadEditorFile(file) {
+  editorStatus(`<div class="loading"><div class="spinner"></div><p>Uploading ${file.name}…</p></div>`);
+  const fd = new FormData();
+  fd.append("video", file);
+  try {
+    const res = await fetch("/api/reel/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) { editorStatus(errorHtml(data)); return; }
+    editor.jobId = data.id;
+    editorStatus("");
+    showEl($("#editorRenderBtn"));
+  } catch {
+    editorStatus(errorHtml({ error: "Upload failed — check your connection." }));
+  }
+}
+
+function pickEditorFile(file) {
+  if (!file) return;
+  if (file.size > 120 * 1024 * 1024) {
+    editorStatus(errorHtml({ error: "Video too large — keep it under 120MB." }));
+    return;
+  }
+  resetEditorOutput();
+  hide("#editorRenderBtn");
+  const pv = $("#editorPreview");
+  pv.src = URL.createObjectURL(file);
+  showEl(pv);
+  uploadEditorFile(file);
+}
+
+$("#editorDrop").addEventListener("click", () => $("#editorFile").click());
+$("#editorFile").addEventListener("change", (e) => pickEditorFile(e.target.files[0]));
+$("#editorDrop").addEventListener("dragover", (e) => { e.preventDefault(); e.currentTarget.classList.add("over"); });
+$("#editorDrop").addEventListener("dragleave", (e) => e.currentTarget.classList.remove("over"));
+$("#editorDrop").addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove("over");
+  pickEditorFile(e.dataTransfer.files[0]);
+});
+
+$("#editorRenderBtn").addEventListener("click", async () => {
+  if (!editor.jobId) return;
+  hide("#editorRenderBtn");
+  resetEditorOutput();
+  showEl($("#editorProgress"));
+  $("#editorStep").textContent = "Starting render…";
+  try {
+    const res = await fetch(`/api/reel/${editor.jobId}/render`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      hide("#editorProgress");
+      editorStatus(errorHtml(data));
+      showEl($("#editorRenderBtn"));
+      return;
+    }
+    pollEditorJob();
+  } catch {
+    hide("#editorProgress");
+    editorStatus(errorHtml({ error: "Could not start the render." }));
+  }
+});
+
+function pollEditorJob() {
+  clearInterval(editor.poll);
+  editor.poll = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/reel/${editor.jobId}/status`);
+      const d = await res.json();
+      if (!res.ok) return;
+      $("#editorStep").textContent = d.step || "Working…";
+      if (d.status === "done") {
+        clearInterval(editor.poll);
+        hide("#editorProgress");
+        editorStatus(`<div class="notice ok">✅ Your Reel is ready — ${Math.round(d.duration || 0)}s with ${d.plan?.edits || 0} auto-edits.</div>`);
+        const dl = $("#editorDownload");
+        dl.href = d.output;
+        showEl(dl);
+        $("#editorTranscript").textContent = d.transcript || "";
+        showEl($("#editorTranscriptWrap"));
+        const pv = $("#editorPreview");
+        pv.src = d.output;
+        showEl(pv);
+      } else if (d.status === "failed") {
+        clearInterval(editor.poll);
+        hide("#editorProgress");
+        editorStatus(errorHtml({ error: d.error || "Render failed." }));
+        showEl($("#editorRenderBtn"));
+      }
+    } catch { /* keep polling */ }
+  }, 2500);
+}

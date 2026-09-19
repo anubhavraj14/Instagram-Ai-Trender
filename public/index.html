@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,7 @@
       <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
       <button class="nav-btn" data-view="plan">🗓️ 7-Day Plan</button>
       <button class="nav-btn" data-view="carousels">🖼️ Carousels</button>
+      <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
     </nav>
     <div class="actions">
@@ -88,6 +89,36 @@
         <h2 class="section-title">🖼️ Ready-to-post carousels</h2>
         <p class="subtle" style="margin:-6px 0 18px">Download the slides, copy the caption, and post — or use "Post on Instagram" to share straight from your phone.</p>
         <div id="carouselCards" class="cards"></div>
+      </section>
+    </div>
+
+    <!-- REEL EDITOR VIEW -->
+    <div id="view-editor" class="view hidden">
+      <h2 class="section-title">🎬 AI Reel Editor</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Upload your raw talking-head video — I'll add captions, zooms, B-roll and text cards, then give you a ready-to-post Reel.</p>
+      <section class="card editor-card">
+        <div id="editorDrop" class="editor-drop">
+          <input type="file" id="editorFile" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
+          <div class="editor-drop-inner">
+            <div class="editor-drop-icon">🎥</div>
+            <p class="editor-drop-title">Drop your video here or <span class="link">browse</span></p>
+            <p class="subtle">MP4 / MOV · up to 120MB · 15–60s works best</p>
+          </div>
+        </div>
+        <video id="editorPreview" class="editor-preview hidden" controls playsinline></video>
+        <div id="editorStatus" class="status"></div>
+        <div id="editorProgress" class="editor-progress hidden">
+          <div class="spinner"></div>
+          <p id="editorStep">Working…</p>
+        </div>
+        <div class="carousel-actions">
+          <button id="editorRenderBtn" class="btn dl-btn hidden" type="button">✨ Auto-edit my Reel</button>
+          <a id="editorDownload" class="btn ig-btn hidden" download="reel-edited.mp4">⬇ Download Reel</a>
+        </div>
+        <details id="editorTranscriptWrap" class="hidden" style="margin-top:14px">
+          <summary class="subtle">Transcript</summary>
+          <pre id="editorTranscript" class="script-custom"></pre>
+        </details>
       </section>
     </div>
 
@@ -195,6 +226,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
