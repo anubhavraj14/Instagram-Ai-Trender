@@ -220,6 +220,15 @@ async function runRenderJob(id, job) {
   const meta = await probeMedia(job.file);
   if (!meta.duration || meta.duration < 2) throw new Error("Could not read video — try an mp4/mov file.");
   job.duration = meta.duration;
+  // 4K software decode alone needs ~300-470MB — impossible on a 512MB instance.
+  // 1080p peaks ~170MB, which fits. Gate hard instead of OOM-crashing the box.
+  if (Math.max(meta.width, meta.height) > 1920) {
+    throw new Error(
+      `Video is ${meta.width}x${meta.height} (4K) — too heavy for the server. ` +
+      `Re-export at 1080p: on iPhone use the Photos share sheet -> Options, or record in ` +
+      `Settings -> Camera -> Record Video -> 1080p. Then upload again.`
+    );
+  }
 
   // Shrink the source first — decoding a big 4K/1080p upload through the whole
   // filter graph is what blew past Render's memory cap.
