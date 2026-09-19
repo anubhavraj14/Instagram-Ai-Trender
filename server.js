@@ -7,7 +7,7 @@ import { researchTrends, researchViral, researchPlan, researchCarousels } from "
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
 import { transcribeAudio, hasWhisperKey } from "./lib/whisper.js";
 import { planEdit } from "./lib/gemini.js";
-import { probeMedia, extractAudio, buildAss, downloadFile, renderReel } from "./lib/editor.js";
+import { probeMedia, extractAudio, buildAss, downloadFile, renderReel, normalizeInput } from "./lib/editor.js";
 import busboy from "busboy";
 import fs from "node:fs";
 import path from "node:path";
@@ -221,9 +221,16 @@ async function runRenderJob(id, job) {
   if (!meta.duration || meta.duration < 2) throw new Error("Could not read video — try an mp4/mov file.");
   job.duration = meta.duration;
 
+  // Shrink the source first — decoding a big 4K/1080p upload through the whole
+  // filter graph is what blew past Render's memory cap.
+  step("Preparing video");
+  const normPath = join(dir, "normalized.mp4");
+  await normalizeInput(job.file, normPath);
+  job.renderInput = normPath;
+
   step("Transcribing speech (Whisper)");
   const audioPath = join(dir, "audio.mp3");
-  await extractAudio(job.file, audioPath);
+  await extractAudio(normPath, audioPath);
   const tx = await transcribeAudio(audioPath);
   job.transcript = tx.text;
   if (!tx.words?.length && !tx.text) throw new Error("No speech detected in the video.");
@@ -255,7 +262,7 @@ async function runRenderJob(id, job) {
   fs.writeFileSync(assPath, buildAss(tx.words, edits.filter((e) => e.type === "textcard")));
   const out = join(OUTPUTS, `${id}.mp4`);
   await renderReel({
-    input: job.file, output: out, edits, brollFiles, assPath, duration: meta.duration,
+    input: job.renderInput || job.file, output: out, edits, brollFiles, assPath, duration: meta.duration,
   });
 
   job.output = `/api/reel/${id}/output`;
