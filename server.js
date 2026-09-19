@@ -2,7 +2,9 @@ import "dotenv/config";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { researchTrends, researchViral, researchPlan } from "./lib/gemini.js";
+import { createHash } from "node:crypto";
+import { researchTrends, researchViral, researchPlan, researchCarousels } from "./lib/gemini.js";
+import { searchPexelsImage, hasPexelsKey } from "./lib/pexels.js";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
 import { getSavedList, setSavedList, getCache, setCache, storageMode } from "./lib/storage.js";
 
@@ -60,11 +62,43 @@ function makeCachedRoute(name, worker) {
 }
 
 app.get("/api/config", (_req, res) =>
-  res.json({ niche: NICHE, requiresPass: !!PASSCODE, storage: storageMode })
+  res.json({ niche: NICHE, requiresPass: !!PASSCODE, storage: storageMode, images: hasPexelsKey() })
 );
 app.get("/api/trends", makeCachedRoute("Trends", researchTrends));
 app.get("/api/viral", makeCachedRoute("Viral", researchViral));
 app.get("/api/plan", makeCachedRoute("Plan", researchPlan));
+app.get("/api/carousels", makeCachedRoute("Carousels", researchCarousels));
+
+// Per-slide REAL photo lookup via Pexels, cached by query+mood (Upstash or memory).
+// The browser loads the returned Pexels URL directly (fast, CORS-clean for canvas export).
+const imgInflight = new Map();
+app.get("/api/slide-image", async (req, res) => {
+  const q = String(req.query.q || "").trim().slice(0, 200);
+  const mood = String(req.query.mood || "").trim().slice(0, 20);
+  if (!q) return res.status(400).json({ error: "Missing image query", code: "BAD_QUERY" });
+  const key = "slideimg:" + createHash("sha1").update(`${q}|${mood}`).digest("hex");
+  try {
+    const cached = await getCache(key).catch(() => null);
+    if (cached?.url) return res.json({ ...cached, cached: true });
+    if (!imgInflight.has(key)) {
+      imgInflight.set(
+        key,
+        searchPexelsImage(q, { mood })
+          .then(async (out) => {
+            await setCache(key, { ...out, cachedAt: Date.now() }).catch(() => {});
+            return out;
+          })
+          .finally(() => imgInflight.delete(key))
+      );
+    }
+    const out = await imgInflight.get(key);
+    res.json({ ...out, cached: false });
+  } catch (err) {
+    const status = err.code === "NO_PEXELS_KEY" ? 400 : err.code === "PEXELS_RATE_LIMIT" ? 429 : 500;
+    if (status >= 500) console.error("slide-image failed:", err.message);
+    res.status(status).json({ error: err.message, code: err.code || "IMG_FAILED" });
+  }
+});
 
 // Login just validates the passcode (client then stores it and sends it as a header).
 app.post("/api/login", (req, res) => {

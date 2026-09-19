@@ -166,6 +166,27 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
   padding: 14px 16px; margin-bottom: 12px;
 }
 .script-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; }
+.script-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.edited-tag {
+  margin-left: 8px; font-size: 10.5px; font-weight: 700; color: #fbbf24;
+  background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35);
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.script-edit { margin-top: 4px; }
+.script-custom {
+  margin: 0; padding: 12px 14px; white-space: pre-wrap; word-break: break-word;
+  background: var(--panel); border: 1px solid rgba(251,191,36,.3); border-radius: 10px;
+  color: #eef1f7; font: 500 13px/1.65 "Inter", system-ui, sans-serif;
+}
+.script-ta {
+  width: 100%; min-height: 280px; resize: vertical;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; font: 500 13px/1.6 "Inter", system-ui, sans-serif;
+}
+.script-ta:focus { outline: none; border-color: var(--accent); }
+.edit-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.save-edit { border-color: rgba(34,197,94,.5); color: var(--post); }
+.reset-edit { color: var(--watch); }
 .script-label { font-size: 12px; font-weight: 700; color: #c4b5fd; }
 .script-label .dur { color: var(--muted); font-weight: 500; }
 .copy-btn {
@@ -261,6 +282,69 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
   border: 1px solid var(--line); padding: 4px 9px; border-radius: 999px; transition: all .15s;
 }
 .sources a:hover { color: var(--text); border-color: var(--accent); }
+
+/* carousels */
+.goal-badge { color: #c4b5fd; }
+.carousel-topic { margin: -8px 0 8px; font-size: 13px; }
+.carousel-structure {
+  margin: 0 0 14px; font-size: 12.5px; color: #c3cad9; line-height: 1.5;
+  background: rgba(124,92,255,.08); border: 1px solid rgba(124,92,255,.2);
+  border-radius: 10px; padding: 9px 12px;
+}
+.carousel-structure .k { color: #c4b5fd; display: inline; margin-right: 4px; }
+.slide-strip {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px;
+  scroll-snap-type: x mandatory;
+}
+.slide-thumb {
+  flex: 0 0 160px; scroll-snap-align: start; position: relative;
+  aspect-ratio: 4 / 5; border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden; background: var(--panel-2);
+}
+.st-imgwrap { position: absolute; inset: 0; }
+.st-imgwrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-shimmer {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, var(--panel-2) 30%, #242b3d 50%, var(--panel-2) 70%);
+  background-size: 200% 100%; animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+.st-fallback {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, var(--panel-2), #0b0d12);
+}
+.slide-thumb.cover .st-fallback { background: linear-gradient(180deg, #2a1f5e, #0b0d12); }
+.slide-thumb.cta .st-fallback { background: linear-gradient(180deg, #0f3d2e, #0b0d12); }
+.st-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(6,8,12,0) 45%, rgba(6,8,12,.85) 100%);
+}
+.st-n {
+  position: absolute; top: 8px; right: 8px; z-index: 2; font-size: 10px; font-weight: 700;
+  color: #fff; background: rgba(0,0,0,.45); padding: 1px 7px; border-radius: 999px;
+}
+.st-h {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 2; margin: 0;
+  font-size: 12.5px; font-weight: 800; color: #fff; line-height: 1.25;
+  text-shadow: 0 1px 6px rgba(0,0,0,.6);
+}
+.slide-thumb.cover .st-h { font-size: 14px; }
+.st-dl {
+  position: absolute; left: 8px; bottom: 8px; z-index: 3;
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+  background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.25);
+  color: #fff; font-size: 13px; line-height: 1;
+  opacity: .75; transition: opacity .15s;
+}
+.slide-thumb:hover .st-dl { opacity: 1; }
+.st-dl:hover { background: rgba(0,0,0,.8); border-color: var(--accent); }
+/* keep the heading clear of the dl button */
+.slide-thumb .st-h { padding-left: 30px; }
+
+.carousel-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.carousel-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.ig-btn { background: linear-gradient(135deg, #833ab4, #fd1d1d 55%, #fcb045); }
+.carousel-actions .copy-btn { padding: 8px 14px; font-size: 12.5px; }
 
 @media (max-width: 760px) {
   .top-grid { grid-template-columns: 1fr; }
