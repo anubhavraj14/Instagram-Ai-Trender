@@ -569,16 +569,6 @@ async function slideCanvas(slide, i, total) {
     ctx.textAlign = "left";
   }
 
-  // footer: slide counter (top-right pill)
-  ctx.font = "700 34px Inter, system-ui, sans-serif";
-  const label = `${i + 1}/${total}`;
-  const tw = ctx.measureText(label).width;
-  ctx.fillStyle = "rgba(0,0,0,.45)";
-  ctx.beginPath();
-  ctx.roundRect(W - pad - tw - 36, 50, tw + 36, 58, 29);
-  ctx.fill();
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(label, W - pad - tw - 18, 91);
   return canvas;
 }
 
@@ -655,6 +645,9 @@ function buildCarouselCard(c) {
   const struct = node.querySelector(".carousel-structure");
   if (c.structure) struct.innerHTML = `<span class="k">🧩 Structure</span> ${esc(c.structure)}`;
   else struct.remove();
+  const music = node.querySelector(".carousel-music");
+  if (c.music) music.innerHTML = `<span class="k">🎵 Music</span> ${esc(c.music)}`;
+  else music.remove();
 
   const strip = node.querySelector(".slide-strip");
   (c.slides || []).forEach((s, i) => {

@@ -292,6 +292,10 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
   border-radius: 10px; padding: 9px 12px;
 }
 .carousel-structure .k { color: #c4b5fd; display: inline; margin-right: 4px; }
+.carousel-music {
+  margin: -6px 0 14px; font-size: 12.5px; color: #c3cad9; line-height: 1.5;
+}
+.carousel-music .k { color: #22d3ee; display: inline; margin-right: 4px; }
 .slide-strip {
   display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px;
   scroll-snap-type: x mandatory;
@@ -351,5 +355,39 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
   .two-scripts { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; gap: 3px; }
   .niche { display: none; }
-  .nav { order: 3; width: 100%; justify-content: center; margin: 0; }
+
+  /* tighter chrome */
+  .topbar { padding: 12px 14px; gap: 10px; }
+  .logo { width: 34px; height: 34px; font-size: 18px; border-radius: 10px; }
+  h1 { font-size: 16px; }
+  .meta { display: none; }
+  .actions { gap: 8px; }
+  .actions .btn { padding: 8px 12px; font-size: 12px; }
+
+  /* nav: scrollable row instead of cramped wrap */
+  .nav {
+    order: 3; width: 100%; margin: 0; justify-content: flex-start;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-btn { padding: 7px 11px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+
+  /* roomier content */
+  .container { padding: 18px 12px 64px; }
+  .card { padding: 14px 14px; border-radius: 12px; }
+  .card-title { font-size: 15.5px; }
+  .status { padding: 40px 12px; }
+
+  /* carousels on phone */
+  .slide-thumb { flex-basis: 128px; }
+  .st-h { font-size: 11.5px; }
+  .carousel-actions { flex-direction: column; align-items: stretch; }
+  .carousel-actions .btn, .carousel-actions .copy-btn {
+    width: 100%; justify-content: center; text-align: center; padding: 11px 14px;
+  }
+
+  /* script edit on phone */
+  .script { padding: 12px 12px; }
+  .script-ta { min-height: 220px; font-size: 12.5px; }
+  .edit-actions .copy-btn { flex: 1; text-align: center; }
 }
