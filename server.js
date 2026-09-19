@@ -232,9 +232,9 @@ async function runRenderJob(id, job) {
 
   // Shrink the source first — decoding a big 4K/1080p upload through the whole
   // filter graph is what blew past Render's memory cap.
-  step("Preparing video");
+  const pct = (t) => Math.min(99, Math.round((t / meta.duration) * 100));
   const normPath = join(dir, "normalized.mp4");
-  await normalizeInput(job.file, normPath);
+  await normalizeInput(job.file, normPath, (t) => step(`Preparing video — ${pct(t)}%`));
   job.renderInput = normPath;
 
   step("Transcribing speech (Whisper)");
@@ -271,7 +271,8 @@ async function runRenderJob(id, job) {
   fs.writeFileSync(assPath, buildAss(tx.words, edits.filter((e) => e.type === "textcard")));
   const out = join(OUTPUTS, `${id}.mp4`);
   await renderReel({
-    input: job.renderInput || job.file, output: out, edits, brollFiles, assPath, duration: meta.duration,
+    input: job.renderInput || job.file, output: out, edits, brollFiles, assPath,
+    duration: meta.duration, onProgress: (t) => step(`Rendering your Reel — ${pct(t)}%`),
   });
 
   job.output = `/api/reel/${id}/output`;
