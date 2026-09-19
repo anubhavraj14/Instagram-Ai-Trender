@@ -997,7 +997,13 @@ function pollEditorJob() {
     try {
       const res = await fetch(`/api/reel/${editor.jobId}/status`);
       const d = await res.json();
-      if (!res.ok) return;
+      if (!res.ok) {
+        clearInterval(editor.poll);
+        hide("#editorProgress");
+        editorStatus(errorHtml({ error: d.error || "Render job lost — the server may have restarted. Please upload again." }));
+        showEl($("#editorRenderBtn"));
+        return;
+      }
       $("#editorStep").textContent = d.step || "Working…";
       if (d.status === "done") {
         clearInterval(editor.poll);
