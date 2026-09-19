@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <header class="topbar">
@@ -95,17 +95,18 @@
     <!-- REEL EDITOR VIEW -->
     <div id="view-editor" class="view hidden">
       <h2 class="section-title">🎬 AI Reel Editor</h2>
-      <p class="subtle" style="margin:-6px 0 18px">Upload your raw talking-head video — I'll add captions, zooms, B-roll and text cards, then give you a ready-to-post Reel.</p>
+      <p class="subtle" style="margin:-6px 0 18px">Upload your raw talking-head video + your script — I'll add zooms, B-roll panels, and keyword highlights at the right moments. You stay on screen the whole time. Add captions yourself afterwards.</p>
       <section class="card editor-card">
         <div id="editorDrop" class="editor-drop">
           <input type="file" id="editorFile" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
           <div class="editor-drop-inner">
             <div class="editor-drop-icon">🎥</div>
             <p class="editor-drop-title">Drop your video here or <span class="link">browse</span></p>
-            <p class="subtle">MP4 / MOV · up to 120MB · 15–60s works best</p>
+            <p class="subtle">MP4 / MOV · 1080p max · up to 120MB · 15–60s works best</p>
           </div>
         </div>
         <video id="editorPreview" class="editor-preview hidden" controls playsinline></video>
+        <textarea id="editorScript" class="script-ta editor-script" rows="6" placeholder="Paste your exact script here (what you say in the video) — the edit plan uses this to pick matching visuals. Leave empty to auto-detect from audio."></textarea>
         <div id="editorStatus" class="status"></div>
         <div id="editorProgress" class="editor-progress hidden">
           <div class="spinner"></div>
@@ -226,6 +227,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

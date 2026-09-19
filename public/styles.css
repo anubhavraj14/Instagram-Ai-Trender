@@ -408,3 +408,4 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
 .editor-progress { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .editor-progress p { margin: 0; color: #c3cad9; font-size: 14px; }
 .editor-card .carousel-actions { justify-content: center; }
+.editor-script { width: 100%; margin-top: 14px; box-sizing: border-box; }

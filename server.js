@@ -197,12 +197,13 @@ app.post("/api/reel/:id/render", async (req, res) => {
   if (job.status === "rendering") return res.json({ ok: true });
   if (!hasWhisperKey()) {
     return res.status(400).json({
-      error: "Word-level captions need a free Groq key — add GROQ_API_KEY (console.groq.com).",
+      error: "Speech timing needs a free Groq key — add GROQ_API_KEY (console.groq.com).",
       code: "NO_GROQ_KEY",
     });
   }
   job.status = "rendering";
   job.error = null;
+  job.script = String(req.body?.script || "").trim().slice(0, 8000);
   res.json({ ok: true });
   runRenderJob(req.params.id, job).catch((e) => {
     job.status = "failed";
@@ -237,29 +238,39 @@ async function runRenderJob(id, job) {
   await normalizeInput(job.file, normPath, (t) => step(`Preparing video — ${pct(t)}%`));
   job.renderInput = normPath;
 
-  step("Transcribing speech (Whisper)");
+  // Whisper is used for TIMING ONLY (when each part is spoken) — no captions are
+  // burned; the user adds subtitles themselves afterwards.
+  step("Analyzing speech timing (Whisper)");
   const audioPath = join(dir, "audio.mp3");
   await extractAudio(normPath, audioPath);
   const tx = await transcribeAudio(audioPath);
   job.transcript = tx.text;
-  if (!tx.words?.length && !tx.text) throw new Error("No speech detected in the video.");
+  if (!tx.segments?.length && !tx.text) throw new Error("No speech detected in the video.");
 
   step("Planning the edit (Gemini)");
-  const plan = await planEdit(tx.text, tx.segments, meta.duration);
+  // The creator's own script is the primary source; Whisper transcript is the fallback.
+  const plan = await planEdit(job.script || tx.text, tx.segments, meta.duration);
   const edits = Array.isArray(plan.edits) ? plan.edits : [];
   job.plan = { title: plan.title || "Reel", edits: edits.length };
 
-  step("Fetching B-roll clips");
+  step("Fetching B-roll & visuals");
   const brollFiles = new Map();
   for (let i = 0; i < edits.length; i++) {
     const e = edits[i];
     if (e.type !== "broll" || !e.query) continue;
     try {
-      const clip = await searchPexelsVideo(e.query);
-      if (clip) {
-        const f = join(dir, `broll-${i}.mp4`);
-        await downloadFile(clip.url, f);
+      if (e.media === "image") {
+        const img = await searchPexelsImage(e.query, {});
+        const f = join(dir, `broll-${i}.jpg`);
+        await downloadFile(img.url, f);
         brollFiles.set(i, f);
+      } else {
+        const clip = await searchPexelsVideo(e.query);
+        if (clip) {
+          const f = join(dir, `broll-${i}.mp4`);
+          await downloadFile(clip.url, f);
+          brollFiles.set(i, f);
+        }
       }
     } catch (err) {
       console.warn(`b-roll "${e.query}" skipped: ${err.message}`);
@@ -267,8 +278,9 @@ async function runRenderJob(id, job) {
   }
 
   step("Rendering your Reel");
-  const assPath = join(dir, "captions.ass");
-  fs.writeFileSync(assPath, buildAss(tx.words, edits.filter((e) => e.type === "textcard")));
+  const textcards = edits.filter((e) => e.type === "textcard" && e.text);
+  const assPath = textcards.length ? join(dir, "cards.ass") : null;
+  if (assPath) fs.writeFileSync(assPath, buildAss([], textcards));
   const out = join(OUTPUTS, `${id}.mp4`);
   await renderReel({
     input: job.renderInput || job.file, output: out, edits, brollFiles, assPath,

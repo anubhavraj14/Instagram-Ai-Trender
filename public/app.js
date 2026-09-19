@@ -976,7 +976,11 @@ $("#editorRenderBtn").addEventListener("click", async () => {
   showEl($("#editorProgress"));
   $("#editorStep").textContent = "Starting render…";
   try {
-    const res = await fetch(`/api/reel/${editor.jobId}/render`, { method: "POST" });
+    const res = await fetch(`/api/reel/${editor.jobId}/render`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ script: $("#editorScript").value || "" }),
+    });
     const data = await res.json();
     if (!res.ok) {
       hide("#editorProgress");
