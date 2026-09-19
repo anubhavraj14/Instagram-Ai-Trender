@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { researchTrends, researchViral, researchPlan, researchCarousels } from "./lib/gemini.js";
 import { searchPexelsImage, hasPexelsKey } from "./lib/pexels.js";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
-import { getSavedList, setSavedList, getCache, setCache, storageMode } from "./lib/storage.js";
+import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, storageMode } from "./lib/storage.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -118,6 +118,24 @@ app.get("/api/saved", requirePass, async (_req, res) => {
 app.put("/api/saved", requirePass, async (req, res) => {
   try {
     await setSavedList(req.body?.items || []);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Synced per-script edits (custom user versions of generated scripts) — same
+// passcode gate as the saved list, so edits follow you across devices.
+app.get("/api/edits", requirePass, async (_req, res) => {
+  try {
+    res.json({ items: await getEditsMap() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.put("/api/edits", requirePass, async (req, res) => {
+  try {
+    await setEditsMap(req.body?.items || {});
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

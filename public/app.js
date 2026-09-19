@@ -66,6 +66,7 @@ async function ensureAuth() {
       passcode = p;
       localStorage.setItem("reelstudio_pass", p);
       await refreshSaved();
+      await refreshEdits();
       return true;
     }
     alert("Wrong passcode.");
@@ -150,28 +151,56 @@ function persistIfSaved(id, data) {
   if (it) { it.data = data; persistSaved(); }
 }
 
-/* ---------- per-script edit persistence (localStorage) ----------
-   Edits are keyed per script (e.g. "trend-1:script", "viral-2:imp") so they
-   survive page refreshes. They're dropped naturally when content is regenerated. */
+/* ---------- per-script edits (synced via server, cached locally) ----------
+   Edits are keyed per script (e.g. "trend-1:script", "viral-2:imp"). They sync
+   through /api/edits (passcode-gated like the saved list) so they follow you
+   across devices; localStorage is the offline/instant cache. */
 const EDITS_KEY = "reelstudio_edits";
-function loadEdits() { try { return JSON.parse(localStorage.getItem(EDITS_KEY)) || {}; } catch { return {}; } }
+let editsMap = {};
+
+function loadEditsLocal() { try { editsMap = JSON.parse(localStorage.getItem(EDITS_KEY)) || {}; } catch { editsMap = {}; } }
+function cacheEditsLocally() { localStorage.setItem(EDITS_KEY, JSON.stringify(editsMap)); }
+
+async function refreshEdits() {
+  if (requiresPass && !passcode) return;
+  try {
+    const res = await fetch("/api/edits", { headers: passHeaders() });
+    if (res.status === 401) { passcode = ""; localStorage.removeItem("reelstudio_pass"); return; }
+    const d = await res.json();
+    editsMap = { ...editsMap, ...(d.items || {}) }; // server entries win
+    cacheEditsLocally();
+  } catch { /* offline: keep local cache */ }
+}
+
+async function persistEdits() {
+  cacheEditsLocally();
+  if (requiresPass && !passcode) return;
+  try {
+    await fetch("/api/edits", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...passHeaders() },
+      body: JSON.stringify({ items: editsMap }),
+    });
+  } catch { /* stays in local cache; syncs on next change */ }
+}
+
 function applyStoredEdit(key, sc) {
-  const e = loadEdits()[key];
+  const e = editsMap[key];
   // only apply if this script doesn't already carry edits (e.g. from a saved item)
   if (e && !sc.edited && !sc.customText) Object.assign(sc, e);
 }
+
 function storeEdit(key, sc) {
-  const map = loadEdits();
   if (sc.edited || sc.customText) {
-    map[key] = {
+    editsMap[key] = {
       hook: sc.hook, onScreenHook: sc.onScreenHook, lines: sc.lines,
       caption: sc.caption, hashtags: sc.hashtags,
       customText: sc.customText, edited: sc.edited, _original: sc._original,
     };
   } else {
-    delete map[key];
+    delete editsMap[key];
   }
-  localStorage.setItem(EDITS_KEY, JSON.stringify(map));
+  persistEdits();
 }
 
 // Parse the plain-text script format back into structured fields so edits
@@ -880,6 +909,7 @@ $("#filters").addEventListener("click", (e) => {
 });
 
 loadLocalCache();
+loadEditsLocal();
 updateSavedBadge();
 
 fetch("/api/config")
@@ -889,6 +919,7 @@ fetch("/api/config")
     requiresPass = !!d.requiresPass;
     hasImages = d.images !== false;
     refreshSaved();
+    refreshEdits();
   })
   .catch(() => {});
 
