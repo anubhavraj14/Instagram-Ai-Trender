@@ -953,6 +953,7 @@ function pickEditorFile(file) {
   }
   resetEditorOutput();
   hide("#editorRenderBtn");
+  editor.file = file;
   const pv = $("#editorPreview");
   pv.src = URL.createObjectURL(file);
   showEl(pv);
