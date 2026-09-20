@@ -1009,7 +1009,10 @@ function pollEditorJob() {
         return;
       }
       $("#editorStep").textContent = d.step || "Working…";
-      if (d.status === "done") {
+      if (d.status === "planned" && d.planData) {
+        clearInterval(editor.poll);
+        renderOnDevice(d.planData);
+      } else if (d.status === "done") {
         clearInterval(editor.poll);
         hide("#editorProgress");
         editorStatus(`<div class="notice ok">✅ Your Reel is ready — ${Math.round(d.duration || 0)}s with ${d.plan?.edits || 0} auto-edits.</div>`);
@@ -1029,4 +1032,36 @@ function pollEditorJob() {
       }
     } catch { /* keep polling */ }
   }, 2500);
+}
+
+// Renders the edit plan in the browser (segmentation + B-roll behind speaker),
+// uploads the silent mp4, server copies the audio in.
+async function renderOnDevice(planData) {
+  try {
+    const { renderClient } = await import("./render.js?v=13");
+    const blob = await renderClient({
+      file: editor.file,
+      plan: planData,
+      onProgress: (_p, label) => { $("#editorStep").textContent = label; },
+    });
+    $("#editorStep").textContent = "Finalizing (adding audio)…";
+    const fd = new FormData();
+    fd.append("video", blob, "rendered.mp4");
+    const res = await fetch(`/api/reel/${editor.jobId}/mux`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Finalize failed");
+    hide("#editorProgress");
+    editorStatus(`<div class="notice ok">✅ Your Reel is ready — ${Math.round(planData.duration || 0)}s with ${planData.edits?.length || 0} auto-edits.</div>`);
+    const dl = $("#editorDownload");
+    dl.href = data.output;
+    showEl(dl);
+    const pv = $("#editorPreview");
+    pv.src = data.output;
+    showEl(pv);
+    showEl($("#editorRenderBtn"));
+  } catch (e) {
+    hide("#editorProgress");
+    editorStatus(errorHtml({ error: e.message || "On-device render failed." }));
+    showEl($("#editorRenderBtn"));
+  }
 }

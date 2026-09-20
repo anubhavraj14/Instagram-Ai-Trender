@@ -7,7 +7,7 @@ import { researchTrends, researchViral, researchPlan, researchCarousels } from "
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
 import { transcribeAudio, hasWhisperKey } from "./lib/whisper.js";
 import { planEdit } from "./lib/gemini.js";
-import { probeMedia, extractAudio, buildAss, downloadFile, renderReel, normalizeInput } from "./lib/editor.js";
+import { probeMedia, extractAudio } from "./lib/editor.js";
 import busboy from "busboy";
 import fs from "node:fs";
 import path from "node:path";
@@ -212,85 +212,126 @@ app.post("/api/reel/:id/render", async (req, res) => {
   });
 });
 
+// PLAN PHASE — the server never decodes video frames anymore (that is what OOMed
+// the 512MB instance). It only: probes headers, extracts audio, runs Whisper for
+// timing, asks Gemini for an edit plan, and resolves Pexels media URLs. The
+// browser renders pixels on-device (MediaPipe segmentation + canvas + WebCodecs),
+// then uploads the silent render to /mux which just copies in the audio track.
 async function runRenderJob(id, job) {
   const step = (s) => { job.step = s; };
   const dir = join(UPLOADS, id);
   fs.mkdirSync(dir, { recursive: true });
 
-  step("Probing video");
+  step("Reading video");
   const meta = await probeMedia(job.file);
   if (!meta.duration || meta.duration < 2) throw new Error("Could not read video — try an mp4/mov file.");
-  job.duration = meta.duration;
-  // 4K software decode alone needs ~300-470MB — impossible on a 512MB instance.
-  // 1080p peaks ~170MB, which fits. Gate hard instead of OOM-crashing the box.
-  if (Math.max(meta.width, meta.height) > 1920) {
-    throw new Error(
-      `Video is ${meta.width}x${meta.height} (4K) — too heavy for the server. ` +
-      `Re-export at 1080p: on iPhone use the Photos share sheet -> Options, or record in ` +
-      `Settings -> Camera -> Record Video -> 1080p. Then upload again.`
-    );
-  }
-
-  // Shrink the source first — decoding a big 4K/1080p upload through the whole
-  // filter graph is what blew past Render's memory cap.
-  const pct = (t) => Math.min(99, Math.round((t / meta.duration) * 100));
-  const normPath = join(dir, "normalized.mp4");
-  await normalizeInput(job.file, normPath, (t) => step(`Preparing video — ${pct(t)}%`));
-  job.renderInput = normPath;
+  job.duration = Math.min(meta.duration, 95);
 
   // Whisper is used for TIMING ONLY (when each part is spoken) — no captions are
   // burned; the user adds subtitles themselves afterwards.
   step("Analyzing speech timing (Whisper)");
   const audioPath = join(dir, "audio.mp3");
-  await extractAudio(normPath, audioPath);
+  await extractAudio(job.file, audioPath);
   const tx = await transcribeAudio(audioPath);
   job.transcript = tx.text;
+  job.audioPath = audioPath;
   if (!tx.segments?.length && !tx.text) throw new Error("No speech detected in the video.");
 
   step("Planning the edit (Gemini)");
   // The creator's own script is the primary source; Whisper transcript is the fallback.
   const plan = await planEdit(job.script || tx.text, tx.segments, meta.duration);
-  const edits = Array.isArray(plan.edits) ? plan.edits : [];
+  const edits = (Array.isArray(plan.edits) ? plan.edits : []).filter(
+    (e) => e && typeof e.start === "number"
+  );
   job.plan = { title: plan.title || "Reel", edits: edits.length };
 
-  step("Fetching B-roll & visuals");
-  const brollFiles = new Map();
-  for (let i = 0; i < edits.length; i++) {
-    const e = edits[i];
+  step("Finding B-roll & visuals");
+  for (const e of edits) {
     if (e.type !== "broll" || !e.query) continue;
     try {
       if (e.media === "image") {
         const img = await searchPexelsImage(e.query, {});
-        const f = join(dir, `broll-${i}.jpg`);
-        await downloadFile(img.url, f);
-        brollFiles.set(i, f);
+        e.mediaUrl = img.url;
       } else {
         const clip = await searchPexelsVideo(e.query);
-        if (clip) {
-          const f = join(dir, `broll-${i}.mp4`);
-          await downloadFile(clip.url, f);
-          brollFiles.set(i, f);
-        }
+        if (clip) e.mediaUrl = clip.url;
       }
     } catch (err) {
       console.warn(`b-roll "${e.query}" skipped: ${err.message}`);
     }
   }
 
-  step("Rendering your Reel");
-  const textcards = edits.filter((e) => e.type === "textcard" && e.text);
-  const assPath = textcards.length ? join(dir, "cards.ass") : null;
-  if (assPath) fs.writeFileSync(assPath, buildAss([], textcards));
-  const out = join(OUTPUTS, `${id}.mp4`);
-  await renderReel({
-    input: job.renderInput || job.file, output: out, edits, brollFiles, assPath,
-    duration: meta.duration, onProgress: (t) => step(`Rendering your Reel — ${pct(t)}%`),
-  });
-
-  job.output = `/api/reel/${id}/output`;
-  job.status = "done";
-  job.step = "Done";
+  job.planData = { title: plan.title || "Reel", edits, duration: job.duration };
+  job.status = "planned"; // browser picks it up and renders on-device
+  job.step = "Plan ready — rendering on your device";
 }
+
+// Browser sends back the silently-rendered video; we copy in the audio track.
+// (-c:v copy = no re-encode, near-zero memory.)
+app.post("/api/reel/:id/mux", (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Job not found", code: "NOT_FOUND" });
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 200 * 1024 * 1024, files: 1 } });
+  const dir = join(UPLOADS, req.params.id);
+  fs.mkdirSync(dir, { recursive: true });
+  let saved = null;
+  bb.on("file", (_n, file) => {
+    saved = join(dir, "rendered.mp4");
+    file.pipe(fs.createWriteStream(saved));
+  });
+  bb.on("finish", async () => {
+    if (!saved || !fs.existsSync(saved)) return res.status(400).json({ error: "No video received" });
+    try {
+      job.step = "Adding audio";
+      const out = join(OUTPUTS, `${req.params.id}.mp4`);
+      const args = ["-y", "-i", saved];
+      if (job.audioPath && fs.existsSync(job.audioPath)) args.push("-i", job.audioPath);
+      args.push("-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest",
+        "-movflags", "+faststart", out);
+      await runFfmpegSimple(args);
+      job.output = `/api/reel/${req.params.id}/output`;
+      job.status = "done";
+      job.step = "Done";
+      res.json({ ok: true, output: job.output });
+    } catch (e) {
+      job.status = "failed";
+      job.error = e.message;
+      res.status(500).json({ error: e.message });
+    }
+  });
+  req.pipe(bb);
+});
+
+// Minimal ffmpeg runner for the cheap mux step (reuses editor's binary).
+import ffmpegPath from "ffmpeg-static";
+import { spawn } from "node:child_process";
+function runFfmpegSimple(args) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let err = "";
+    p.stderr.on("data", (d) => { err += d; });
+    p.on("error", reject);
+    p.on("close", (c) => (c === 0 ? resolve() : reject(new Error(`mux failed: ${err.slice(-300)}`))));
+  });
+}
+
+// Optional media proxy in case a Pexels URL lacks CORS headers in some browser.
+app.get("/api/reel-media", async (req, res) => {
+  const url = String(req.query.url || "");
+  if (!/^https:\/\/(images|videos|player)\.pexels\.com\//.test(url)) {
+    return res.status(400).json({ error: "Bad url" });
+  }
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return res.status(502).end();
+    res.set("Content-Type", r.headers.get("content-type") || "application/octet-stream");
+    res.set("Access-Control-Allow-Origin", "*");
+    const { Readable } = await import("node:stream");
+    Readable.fromWeb(r.body).pipe(res);
+  } catch (e) {
+    res.status(502).end();
+  }
+});
 
 app.get("/api/reel/:id/status", (req, res) => {
   const job = jobs.get(req.params.id);
@@ -298,7 +339,7 @@ app.get("/api/reel/:id/status", (req, res) => {
   res.json({
     status: job.status, step: job.step, error: job.error,
     output: job.output, duration: job.duration, plan: job.plan,
-    transcript: job.transcript,
+    transcript: job.transcript, planData: job.planData,
   });
 });
 
