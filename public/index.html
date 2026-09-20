@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,7 @@
       <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
       <button class="nav-btn" data-view="plan">🗓️ 7-Day Plan</button>
       <button class="nav-btn" data-view="carousels">🖼️ Carousels</button>
+      <button class="nav-btn" data-view="scriptkit">🎒 Script Kit</button>
       <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
     </nav>
@@ -89,6 +90,20 @@
         <h2 class="section-title">🖼️ Ready-to-post carousels</h2>
         <p class="subtle" style="margin:-6px 0 18px">Download the slides, copy the caption, and post — or use "Post on Instagram" to share straight from your phone.</p>
         <div id="carouselCards" class="cards"></div>
+      </section>
+    </div>
+
+    <!-- SCRIPT KIT VIEW -->
+    <div id="view-scriptkit" class="view hidden">
+      <h2 class="section-title">🎒 Script Kit</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Paste any Reel script and get a complete shoot-and-edit kit: B-roll clips you can download, background music that psychologically holds attention, sound effects, captions, hashtags, and editing tips.</p>
+      <section class="card editor-card">
+        <textarea id="scriptkitInput" class="script-ta editor-script" rows="10" placeholder="Paste your full script here (what the creator will say). Hindi/English/Hinglish all work."></textarea>
+        <div id="scriptkitStatus" class="status" style="padding:16px 0"></div>
+        <div class="carousel-actions">
+          <button id="scriptkitBtn" class="btn dl-btn" type="button">✨ Build my asset kit</button>
+        </div>
+        <div id="scriptkitOutput"></div>
       </section>
     </div>
 
@@ -227,6 +242,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

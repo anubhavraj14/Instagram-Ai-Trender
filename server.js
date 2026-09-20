@@ -3,8 +3,9 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { researchTrends, researchViral, researchPlan, researchCarousels } from "./lib/gemini.js";
+import { researchTrends, researchViral, researchPlan, researchCarousels, planScriptKit } from "./lib/gemini.js";
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
+import { searchBrollOptions, searchMusicOptions, mediaConfig } from "./lib/media.js";
 import { transcribeAudio, hasWhisperKey } from "./lib/whisper.js";
 import { planEdit } from "./lib/gemini.js";
 import { probeMedia, extractAudio } from "./lib/editor.js";
@@ -67,13 +68,85 @@ function makeCachedRoute(name, worker) {
   };
 }
 
-app.get("/api/config", (_req, res) =>
-  res.json({ niche: NICHE, requiresPass: !!PASSCODE, storage: storageMode, images: hasPexelsKey(), editor: hasWhisperKey() })
-);
+app.get("/api/config", (_req, res) => {
+  const mcfg = mediaConfig();
+  res.json({
+    niche: NICHE,
+    requiresPass: !!PASSCODE,
+    storage: storageMode,
+    images: hasPexelsKey(),
+    editor: hasWhisperKey(),
+    media: { ...mcfg, music: true },
+  });
+});
 app.get("/api/trends", makeCachedRoute("Trends", researchTrends));
 app.get("/api/viral", makeCachedRoute("Viral", researchViral));
 app.get("/api/plan", makeCachedRoute("Plan", researchPlan));
 app.get("/api/carousels", makeCachedRoute("Carousels", researchCarousels));
+
+// ---------- Script Kit ----------
+// Paste a script -> get a full pre-production asset pack: B-roll, BGM, SFX,
+// visual directions, captions, editing tips. Media URLs are resolved server-side
+// from Pexels/Pixabay (B-roll) and Free To Use (BGM).
+app.post("/api/script-kit", async (req, res) => {
+  const script = String(req.body?.script || "").trim();
+  if (!script) return res.status(400).json({ error: "Paste a script first.", code: "BAD_REQUEST" });
+  if (script.length > 8000) return res.status(400).json({ error: "Script too long (max 8000 chars).", code: "BAD_REQUEST" });
+  try {
+    const kit = await planScriptKit(script, NICHE);
+    const beats = Array.isArray(kit.beats) ? kit.beats : [];
+
+    // Resolve several B-roll options per beat (Pexels -> Pixabay fallback, video -> image fallback).
+    const brollJobs = [];
+    for (const beat of beats) {
+      const br = beat.broll;
+      if (!br?.needed || !br?.query) continue;
+      brollJobs.push(
+        searchBrollOptions(br.query, br.media === "image" ? "image" : "video", 4)
+          .then((out) => {
+            br.options = out;
+            if (out[0]) {
+              br.media = out[0].type;
+              br.mediaUrl = out[0].url;
+            }
+          })
+          .catch((err) => {
+            console.warn(`script-kit b-roll "${br.query}" skipped: ${err.message}`);
+          })
+      );
+    }
+    await Promise.all(brollJobs);
+
+    // Resolve several BGM options (Free To Use API, no key needed).
+    const bgmJobs = (kit.bgm || []).map(async (m) => {
+      const query = m.searchQuery || m.name || m.mood || "background music";
+      const fallbacks = [
+        m.mood && `${m.mood} instrumental`,
+        m.energyLevel === "high" ? "energetic upbeat instrumental" : m.energyLevel === "low" ? "ambient chill instrumental" : "background music instrumental",
+        "background music",
+      ].filter(Boolean);
+      try {
+        const tracks = await searchMusicOptions(query, { limit: 4, fallbacks });
+        m.options = tracks;
+        if (tracks[0]) {
+          m.trackUrl = tracks[0].url;
+          m.title = tracks[0].title;
+          m.artist = tracks[0].artist;
+          m.duration = tracks[0].duration;
+          m.source = tracks[0].source;
+        }
+      } catch (err) {
+        console.warn(`script-kit bgm "${query}" skipped: ${err.message}`);
+      }
+    });
+    await Promise.all(bgmJobs);
+
+    res.json({ ...kit, media: mediaConfig() });
+  } catch (err) {
+    console.error("script-kit failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SCRIPT_KIT_FAILED" });
+  }
+});
 
 // Per-slide REAL photo lookup via Pexels, cached by query+mood (Upstash or memory).
 // The browser loads the returned Pexels URL directly (fast, CORS-clean for canvas export).

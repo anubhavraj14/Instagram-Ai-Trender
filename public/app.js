@@ -6,6 +6,7 @@ const state = { view: "trends", trends: null, viral: null, plan: null, carousels
 let savedCache = [];
 let requiresPass = false;
 let hasImages = true;
+let mediaConfigClient = { pexels: false, pixabay: false, music: false };
 let passcode = localStorage.getItem("reelstudio_pass") || "";
 
 /* ---------- helpers ---------- */
@@ -871,9 +872,9 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "scriptkit", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = (view === "saved" || view === "editor") ? "none" : "";
+  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit") ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
@@ -911,12 +912,183 @@ fetch("/api/config")
     $("#niche").textContent = d.niche || "";
     requiresPass = !!d.requiresPass;
     hasImages = d.images !== false;
+    mediaConfigClient = { pexels: false, pixabay: false, music: false, ...(d.media || {}) };
     refreshSaved();
     refreshEdits();
   })
   .catch(() => {});
 
 loadTrends(false);
+
+/* ---------- Script Kit ---------- */
+const scriptkitStatus = (html) => { $("#scriptkitStatus").innerHTML = html; };
+
+$("#scriptkitBtn").addEventListener("click", async () => {
+  const script = $("#scriptkitInput").value.trim();
+  if (!script) { scriptkitStatus(errorHtml({ error: "Paste a script first." })); return; }
+  scriptkitStatus(`<div class="loading"><div class="spinner"></div><p>Building your asset kit…</p></div>`);
+  $("#scriptkitOutput").innerHTML = "";
+  try {
+    const res = await fetch("/api/script-kit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ script }),
+    });
+    const data = await res.json();
+    if (!res.ok) { scriptkitStatus(errorHtml(data)); return; }
+    scriptkitStatus("");
+    renderScriptKit(data);
+  } catch {
+    scriptkitStatus(errorHtml({ error: "Could not reach the server. Is it running?" }));
+  }
+});
+
+function renderScriptKit(kit) {
+  const out = $("#scriptkitOutput");
+  const mediaReady = mediaConfigClient.pexels || mediaConfigClient.pixabay;
+  const noticeLines = [];
+  if (!mediaReady) noticeLines.push(`🎞️ B-roll download links need a free stock-media key. Add <code>PEXELS_API_KEY</code> or <code>PIXABAY_API_KEY</code> to your .env and refresh.`);
+  const imgNotice = noticeLines.length ? `<p class="notice">${noticeLines.join(" ")}</p>` : "";
+
+  const hook = kit.hook || {};
+  const hookHtml = `
+    <div class="sk-section">
+      <h3 class="sk-section-title">🪝 Hook Analysis</h3>
+      <div class="sk-block">
+        <p class="sk-line">${esc(hook.line || "")}</p>
+        <span class="sk-badge ${hook.strength === "strong" ? "post" : hook.strength === "moderate" ? "watch" : "ignore"}">${esc((hook.strength || "unknown").toUpperCase())}</span>
+        <p class="sk-text">${esc(hook.why || "")}</p>
+        ${hook.improvedLine ? `<div class="sk-improve"><span class="k">Stronger alternative</span><p>${esc(hook.improvedLine)}</p></div>` : ""}
+      </div>
+    </div>`;
+
+  function renderBrollOption(opt, idx) {
+    const isVideo = opt.type === "video";
+    const preview = isVideo
+      ? `<video class="sk-preview" src="${esc(opt.url)}" poster="${esc(opt.thumb || "")}" preload="metadata" controls playsinline></video>`
+      : `<img class="sk-preview" src="${esc(opt.thumb || opt.url)}" alt="" loading="lazy" />`;
+    return `
+      <div class="sk-option">
+        ${preview}
+        <div class="sk-option-info">
+          <span class="sk-option-tag">#${idx + 1} · ${esc(opt.type || "media")} · ${esc(opt.source || "")}</span>
+          ${opt.credit ? `<span class="sk-option-credit">by ${esc(opt.credit)}</span>` : ""}
+          ${opt.duration ? `<span class="sk-option-credit">${Math.round(opt.duration)}s</span>` : ""}
+        </div>
+        <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Use this</a>
+      </div>
+    `;
+  }
+
+  const beats = (kit.beats || []).map((b, i) => {
+    const br = b.broll || {};
+    const options = Array.isArray(br.options) ? br.options : (br.mediaUrl ? [{ url: br.mediaUrl, thumb: "", type: br.media, source: br.source, credit: br.credit, duration: br.duration }] : []);
+    const hasOptions = options.length > 0;
+    const fallbackLinks = br.query && !hasOptions ? `
+      <div class="sk-fallback-links">
+        <a class="copy-btn" href="https://www.pexels.com/search/${encodeURIComponent(br.query)}/?orientation=portrait" target="_blank" rel="noopener">Search Pexels</a>
+        <a class="copy-btn" href="https://pixabay.com/videos/search/${encodeURIComponent(br.query)}/?orientation=vertical" target="_blank" rel="noopener">Search Pixabay</a>
+      </div>` : "";
+    return `
+    <div class="sk-beat">
+      <div class="sk-beat-head">
+        <span class="sk-beat-time">${b.startSeconds ?? i * 4}s–${b.endSeconds ?? (i + 1) * 4}s</span>
+        <span class="beat-part ${(b.part || "").split(" ")[0].toLowerCase()}">${esc(b.part || "beat")}</span>
+        ${b.zoom ? `<span class="sk-badge zoom">ZOOM</span>` : ""}
+      </div>
+      <p class="sk-beat-say">${esc(b.say || "")}</p>
+      ${b.onScreenText ? `<p class="sk-beat-ost">🅣 ${esc(b.onScreenText)}</p>` : ""}
+      ${b.visualDirection ? `<p class="sk-beat-visual">🎥 ${esc(b.visualDirection)}</p>` : ""}
+      ${br.needed ? `
+        <div class="sk-broll ${hasOptions ? "has-media" : ""}">
+          <div class="sk-broll-head">
+            <span class="k">B-roll options</span>
+            <span class="sk-broll-meta">${esc(br.placement || "")}</span>
+          </div>
+          <p class="sk-broll-query">🔍 ${esc(br.query || "")}</p>
+          <p class="sk-text">${esc(br.why || "")}</p>
+          ${hasOptions ? `<div class="sk-options">${options.map(renderBrollOption).join("")}</div>` : ""}
+          ${fallbackLinks}
+        </div>
+      ` : ""}
+      ${b.soundEffect ? `<p class="sk-sfx">🔊 ${esc(b.soundEffect)}</p>` : ""}
+    </div>`;
+  }).join("");
+
+  function renderMusicOption(opt, idx) {
+    return `
+      <div class="sk-option sk-music-option">
+        <div class="sk-music-head">
+          <strong>${esc(opt.title || "Untitled")}</strong>
+          <span class="sk-badge">${esc(opt.genre || "music")}</span>
+        </div>
+        <audio class="sk-audio" src="${esc(opt.url)}" preload="metadata" controls></audio>
+        <div class="sk-option-info">
+          <span class="sk-option-credit">by ${esc(opt.artist || "Unknown")}</span>
+          <span class="sk-option-credit">${opt.duration ? Math.round(opt.duration) + "s" : ""}</span>
+          <span class="sk-option-credit">${esc(opt.source || "")}</span>
+        </div>
+        <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Download this</a>
+      </div>
+    `;
+  }
+
+  const bgm = (kit.bgm || []).map((m) => {
+    const options = Array.isArray(m.options) ? m.options : (m.trackUrl ? [{ url: m.trackUrl, title: m.title, artist: m.artist, duration: m.duration, genre: m.mood || m.genre, source: m.source }] : []);
+    const hasOptions = options.length > 0;
+    return `
+    <div class="sk-bgm">
+      <div class="sk-bgm-head">
+        <strong>${esc(m.name || "")}</strong>
+        <span class="sk-badge ${(m.energyLevel || "medium") === "high" ? "post" : (m.energyLevel || "medium") === "low" ? "ignore" : "watch"}">${esc((m.mood || "").toUpperCase())}</span>
+      </div>
+      <p class="sk-text"><strong>Why it holds attention:</strong> ${esc(m.whyItRetains || "")}</p>
+      <p class="sk-meta">Energy: ${esc(m.energyLevel || "")} · Start: ${esc(m.whenToStart || "")}</p>
+      ${hasOptions ? `<p class="sk-text">Preview and pick one:</p><div class="sk-options">${options.map(renderMusicOption).join("")}</div>` : ""}
+      ${!hasOptions && m.whereToFind ? `<p class="sk-meta">Find it on: ${esc(m.whereToFind || "")}</p>` : ""}
+    </div>
+  `;
+  }).join("");
+
+  const sfx = (kit.soundEffects || []).map((s) => `<li>${esc(s)}</li>`).join("");
+  const tips = (kit.editingTips || []).map((t) => `<li>${esc(t)}</li>`).join("");
+  const assets = (kit.requiredAssets || []).map((a) => `<div class="sk-asset"><span class="sk-asset-type">${esc(a.type || "")}</span><span>${esc(a.description || "")}</span></div>`).join("");
+  const cap = kit.captions || {};
+
+  out.innerHTML = `
+    ${imgNotice}
+    <div class="sk-header">
+      <h3>${esc(kit.title || "Untitled Reel")}</h3>
+      <span class="sk-badge watch">~${kit.estimatedDurationSeconds || "~"}s · ${esc(kit.niche || "")}</span>
+    </div>
+    <p class="sk-psychology"><strong>Audience trigger:</strong> ${esc(kit.audiencePsychology || "")}</p>
+    ${hookHtml}
+    <div class="sk-section">
+      <h3 class="sk-section-title">🎬 Beat-by-beat plan</h3>
+      <div class="sk-beats">${beats}</div>
+    </div>
+    <div class="sk-section">
+      <h3 class="sk-section-title">🎵 Background music</h3>
+      <div class="sk-bgms">${bgm || "<p class=\"subtle\">No BGM suggestions.</p>"}</div>
+    </div>
+    ${sfx ? `<div class="sk-section"><h3 class="sk-section-title">🔊 Sound effects</h3><ul class="sk-list">${sfx}</ul></div>` : ""}
+    <div class="sk-section">
+      <h3 class="sk-section-title">📝 Caption + hashtags</h3>
+      <div class="sk-caption-block">
+        <p>${esc(cap.caption || "")}</p>
+        <p class="s-hashtags">${esc((cap.hashtags || []).join("  "))}</p>
+        <button class="copy-btn cap-copy" type="button">📋 Copy caption</button>
+      </div>
+    </div>
+    ${assets ? `<div class="sk-section"><h3 class="sk-section-title">🛠️ Required assets</h3><div class="sk-assets">${assets}</div></div>` : ""}
+    ${tips ? `<div class="sk-section"><h3 class="sk-section-title">✂️ Editing tips</h3><ul class="sk-list">${tips}</ul></div>` : ""}
+  `;
+
+  const capBtn = out.querySelector(".cap-copy");
+  if (capBtn) {
+    capBtn.addEventListener("click", (e) => copyText(e, `${cap.caption || ""}\n\n${(cap.hashtags || []).join(" ")}`));
+  }
+}
 
 /* ---------- Reel Editor ---------- */
 const editor = { jobId: null, file: null, poll: null };

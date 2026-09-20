@@ -390,6 +390,10 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
   .script { padding: 12px 12px; }
   .script-ta { min-height: 220px; font-size: 12.5px; }
   .edit-actions .copy-btn { flex: 1; text-align: center; }
+
+  /* script kit options on phone */
+  .sk-options { grid-template-columns: 1fr; }
+  .sk-preview { aspect-ratio: 16 / 9; }
 }
 
 /* ---------- Reel Editor ---------- */
@@ -409,3 +413,136 @@ h1 { font-size: 18px; margin: 0; letter-spacing: -0.02em; }
 .editor-progress p { margin: 0; color: #c3cad9; font-size: 14px; }
 .editor-card .carousel-actions { justify-content: center; }
 .editor-script { width: 100%; margin-top: 14px; box-sizing: border-box; }
+
+/* ---------- Script Kit ---------- */
+#scriptkitOutput { margin-top: 22px; }
+.sk-header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 10px;
+}
+.sk-header h3 { margin: 0; font-size: 16px; }
+.sk-psychology {
+  background: rgba(124,92,255,.08); border: 1px solid rgba(124,92,255,.25);
+  border-radius: 10px; padding: 10px 13px; font-size: 13px; color: #d7dcea; margin: 0 0 18px;
+}
+.sk-section { margin-bottom: 22px; }
+.sk-section-title { font-size: 13.5px; font-weight: 700; color: var(--accent); margin: 0 0 10px; }
+.sk-block {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px;
+}
+.sk-line { margin: 0 0 8px; font-size: 14.5px; font-weight: 600; color: #fff; line-height: 1.5; }
+.sk-text { margin: 8px 0 0; font-size: 13px; color: #d7dcea; line-height: 1.55; }
+.sk-meta { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.sk-badge {
+  display: inline-flex; font-size: 10px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 6px;
+  background: rgba(124,92,255,.12); color: #c4b5fd; border: 1px solid rgba(124,92,255,.25);
+}
+.sk-badge.post { background: rgba(34,197,94,.12); color: var(--post); border-color: rgba(34,197,94,.25); }
+.sk-badge.watch { background: rgba(245,158,11,.12); color: var(--watch); border-color: rgba(245,158,11,.25); }
+.sk-badge.ignore { background: rgba(107,114,128,.15); color: #aeb6c6; border-color: rgba(107,114,128,.25); }
+.sk-badge.zoom { background: rgba(34,211,238,.1); color: #22d3ee; border-color: rgba(34,211,238,.25); }
+.sk-improve {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+}
+.sk-improve .k { display: block; margin-bottom: 4px; }
+.sk-beats { display: flex; flex-direction: column; gap: 12px; }
+.sk-beat {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px;
+}
+.sk-beat-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.sk-beat-time {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  background: var(--panel); padding: 3px 8px; border-radius: 6px;
+}
+.sk-beat-say { margin: 0 0 8px; font-size: 14px; font-weight: 500; color: #eef1f7; line-height: 1.5; }
+.sk-beat-ost { margin: 0 0 6px; font-size: 12.5px; color: #a5b4fc; }
+.sk-beat-visual { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); }
+.sk-broll {
+  background: rgba(245,158,11,.05); border: 1px solid rgba(245,158,11,.25); border-radius: 10px;
+  padding: 12px 14px; margin-top: 10px;
+}
+.sk-broll.has-media { border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.05); }
+.sk-broll-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.sk-broll-query { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: #fbbf24; }
+.sk-broll-meta { font-size: 11px; color: var(--muted); }
+.sk-dl { padding: 6px 12px; font-size: 12px; margin-top: 8px; text-decoration: none; display: inline-block; }
+.sk-credit { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
+.sk-fallback-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sk-fallback-links a { text-decoration: none; }
+
+/* option cards */
+.sk-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.sk-option {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sk-preview {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+}
+.sk-preview video { display: block; }
+.sk-option-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 11px;
+}
+.sk-option-tag {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.sk-option-credit { color: var(--muted); }
+.sk-option-dl {
+  margin-top: auto;
+  text-align: center;
+  justify-content: center;
+  display: flex;
+  text-decoration: none;
+}
+
+/* music options */
+.sk-music-option { aspect-ratio: auto; }
+.sk-music-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sk-music-head strong { font-size: 13px; color: #fff; }
+.sk-audio { width: 100%; height: 34px; margin: 4px 0; }
+.sk-sfx { margin: 10px 0 0; font-size: 12.5px; color: #22d3ee; }
+.sk-bgms { display: flex; flex-direction: column; gap: 10px; }
+.sk-bgm {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px;
+}
+.sk-bgm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.sk-bgm-head strong { font-size: 14px; color: #fff; }
+.sk-list { margin: 0; padding-left: 18px; }
+.sk-list li { font-size: 13px; color: #d7dcea; line-height: 1.6; margin-bottom: 4px; }
+.sk-caption-block {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px;
+}
+.sk-caption-block p { margin: 0 0 8px; font-size: 13px; line-height: 1.55; color: #d7dcea; }
+.sk-assets { display: flex; flex-direction: column; gap: 8px; }
+.sk-asset {
+  display: flex; gap: 10px; align-items: baseline;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 13px; font-size: 13px; color: #d7dcea;
+}
+.sk-asset-type {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--accent); white-space: nowrap;
+}
