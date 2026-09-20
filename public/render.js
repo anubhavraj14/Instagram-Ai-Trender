@@ -19,7 +19,7 @@ async function getSegmenter() {
     baseOptions: {
       modelAssetPath:
         "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite",
-      delegate: "GPU",
+      delegate: "CPU",
     },
     runningMode: "VIDEO",
     outputConfidenceMasks: true,
@@ -174,6 +174,7 @@ export async function renderClient({ file, plan, onProgress }) {
 
   say(0.05, "Rendering…");
   let lastT = -1;
+  let segFail = 0;
   await new Promise((resolve, reject) => {
     let done = false;
     const finish = async () => {
@@ -211,9 +212,15 @@ export async function renderClient({ file, plan, onProgress }) {
             const bw = brollEl.videoWidth || brollEl.width, bh = brollEl.videoHeight || brollEl.height;
             if (brollEl.tagName === "VIDEO" && brollEl.paused) brollEl.play().catch(() => {});
             drawCover(ctx, brollEl, bw, bh);
-            // speaker cutout on top
+            // speaker cutout on top — a bad frame must never kill the render
             if (!maskCanvas) maskCanvas = document.createElement("canvas");
-            const okCut = cutoutPerson(video, seg, vw, vh, personCanvas, maskCanvas, t * 1000);
+            let okCut = false;
+            try {
+              okCut = cutoutPerson(video, seg, vw, vh, personCanvas, maskCanvas, t * 1000);
+            } catch (err) {
+              segFail = (segFail || 0) + 1;
+              if (segFail === 1) console.warn("segmentation failed, using raw frame:", err);
+            }
             if (!okCut) drawCover(ctx, video, vw, vh); // fallback: show raw frame
             else ctx.drawImage(personCanvas, 0, 0);
           } else {
