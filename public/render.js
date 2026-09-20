@@ -155,9 +155,22 @@ export async function renderClient({ file, plan, onProgress }) {
   const muxer = new Muxer({ target, video: { codec: "avc", width: W, height: H }, fastStart: "in-memory" });
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => { throw e; },
+    error: (e) => console.error("encoder:", e),
   });
-  encoder.configure({ codec: "avc1.4d002a", width: W, height: H, bitrate: 6_000_000, framerate: FPS });
+  // Probe codec support — the right avc string varies by browser/GPU.
+  const codecs = ["avc1.4d002a", "avc1.42E01F", "avc1.640028"];
+  let configured = false;
+  for (const codec of codecs) {
+    const cfg = { codec, width: W, height: H, bitrate: 6_000_000, framerate: FPS, avc: { format: "avc" } };
+    try {
+      const { supported } = await VideoEncoder.isConfigSupported(cfg);
+      if (!supported) continue;
+      encoder.configure(cfg);
+      configured = true;
+      break;
+    } catch { /* try next */ }
+  }
+  if (!configured) throw new Error("No supported H.264 encoder found — try the latest Chrome.");
 
   say(0.05, "Rendering…");
   let lastT = -1;
@@ -210,7 +223,10 @@ export async function renderClient({ file, plan, onProgress }) {
           const card = activeAt(edits, "textcard", t);
           if (card?.text) drawTextCard(ctx, card.text);
           if (encoder.encodeQueueSize > 10) await new Promise((r) => setTimeout(r, 30));
-          encoder.encode(new VideoFrame(canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) }));
+          encoder.encode(
+            new VideoFrame(canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / FPS) }),
+            { keyFrame: Math.round(t * FPS) % (FPS * 2) === 0 }
+          );
           say(0.05 + 0.85 * (t / duration), `Rendering… ${Math.round((t / duration) * 100)}%`);
         }
         video.requestVideoFrameCallback(onFrame);
