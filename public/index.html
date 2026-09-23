@@ -23,6 +23,7 @@
       <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
       <button class="nav-btn" data-view="plan">🗓️ 7-Day Plan</button>
       <button class="nav-btn" data-view="carousels">🖼️ Carousels</button>
+      <button class="nav-btn" data-view="generator">✨ Content Generator</button>
       <button class="nav-btn" data-view="scriptkit">🎒 Script Kit</button>
       <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
@@ -91,6 +92,30 @@
         <p class="subtle" style="margin:-6px 0 18px">Download the slides, copy the caption, and post — or use "Post on Instagram" to share straight from your phone.</p>
         <div id="carouselCards" class="cards"></div>
       </section>
+    </div>
+
+    <!-- CONTENT GENERATOR VIEW -->
+    <div id="view-generator" class="view hidden">
+      <h2 class="section-title">✨ Content Generator</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Enter a topic, pick a format, and get ready-to-use content. Each format runs its own generation workflow.</p>
+      <section class="card editor-card">
+        <label class="gen-label" for="genTopic">Topic</label>
+        <input id="genTopic" class="gen-input" type="text" maxlength="300" placeholder="e.g. 3 mistakes new creators make with hooks" />
+        <label class="gen-label" for="genContext">Additional context <span class="subtle">(optional)</span></label>
+        <textarea id="genContext" class="script-ta" rows="3" placeholder="Audience, angle, your take, offers/links to mention, anything else…"></textarea>
+        <label class="gen-label">Content type</label>
+        <div id="genTypes" class="gen-types">
+          <button class="chip gen-type active" data-type="story" type="button">📱 Story</button>
+          <button class="chip gen-type" data-type="carousel" type="button">🖼️ Carousel</button>
+          <button class="chip gen-type" data-type="reel" type="button">🎬 Reel</button>
+          <button class="chip gen-type" data-type="post" type="button">📝 Normal Post</button>
+        </div>
+        <div class="carousel-actions">
+          <button id="genBtn" class="btn dl-btn" type="button">✨ Generate Content</button>
+        </div>
+        <div id="genStatus" class="status" style="padding:16px 0 0"></div>
+      </section>
+      <div id="genOutput" class="cards"></div>
     </div>
 
     <!-- SCRIPT KIT VIEW -->

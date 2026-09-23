@@ -801,6 +801,11 @@ function renderSaved() {
     if (item.type === "viral") card = buildViralCard(item.data);
     else if (item.type === "plan") card = buildPlanCard(item.data);
     else if (item.type === "carousel") card = buildCarouselCard(item.data);
+    else if (item.type === "generated") {
+      item.data._saveId = item.id;
+      buildGeneratedCards(item.data).forEach((c) => wrap.appendChild(c));
+      return;
+    }
     else card = buildTrendCard(item.data);
     wrap.appendChild(card);
   });
@@ -872,9 +877,9 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "scriptkit", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit") ? "none" : "";
+  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator") ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
@@ -943,8 +948,7 @@ $("#scriptkitBtn").addEventListener("click", async () => {
   }
 });
 
-function renderScriptKit(kit) {
-  const out = $("#scriptkitOutput");
+function renderScriptKit(kit, out = $("#scriptkitOutput")) {
   const mediaReady = mediaConfigClient.pexels || mediaConfigClient.pixabay;
   const noticeLines = [];
   if (!mediaReady) noticeLines.push(`🎞️ B-roll download links need a free stock-media key. Add <code>PEXELS_API_KEY</code> or <code>PIXABAY_API_KEY</code> to your .env and refresh.`);
@@ -1237,4 +1241,180 @@ async function renderOnDevice(planData) {
     editorStatus(errorHtml({ error: e.message || "On-device render failed." }));
     showEl($("#editorRenderBtn"));
   }
+}
+
+/* ---------- Content Generator ---------- */
+// Central entry point -> POST /api/generate -> per-type workflow on the server.
+// Each workflow's payload maps to an existing renderer where possible
+// (carousel -> buildCarouselCard, reel -> buildScriptEl), so download/share/
+// save/edit behavior stays identical to the rest of the app.
+let genType = "story";
+
+$("#genTypes").addEventListener("click", (e) => {
+  const chip = e.target.closest(".gen-type");
+  if (!chip) return;
+  document.querySelectorAll(".gen-type").forEach((c) => c.classList.remove("active"));
+  chip.classList.add("active");
+  genType = chip.dataset.type;
+});
+
+const genStatus = (html) => { $("#genStatus").innerHTML = html; };
+
+$("#genBtn").addEventListener("click", async () => {
+  const topic = $("#genTopic").value.trim();
+  const context = $("#genContext").value.trim();
+  if (!topic) { genStatus(errorHtml({ error: "Enter a content topic first." })); return; }
+  const btn = $("#genBtn");
+  btn.disabled = true;
+  genStatus(`<div class="loading"><div class="spinner"></div><p>Generating your ${genType}…</p></div>`);
+  $("#genOutput").innerHTML = "";
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: genType, topic, context }),
+    });
+    const data = await res.json();
+    if (!res.ok) { genStatus(errorHtml(data)); return; }
+    genStatus("");
+    renderGenerated(data);
+  } catch {
+    genStatus(errorHtml({ error: "Could not reach the server. Is it running?" }));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderGenerated(result) {
+  const out = $("#genOutput");
+  out.innerHTML = "";
+  buildGeneratedCards(result).forEach((card) => out.appendChild(card));
+}
+
+// Builds the card element(s) for a generated result — also used to re-render
+// saved "generated" items in the Saved view.
+function buildGeneratedCards(result) {
+  const cards = [];
+  const genId = result._saveId || `gen-${result.type}-${Date.now()}`;
+  const title = result.title || "Generated content";
+
+  if (result.type === "carousel") {
+    (result.payload?.carousels || []).forEach((c) => {
+      if (!c.id) c.id = genId;
+      cards.push(buildCarouselCard(c)); // same card as Carousels page
+    });
+    return cards;
+  }
+
+  if (result.type === "reel") {
+    const p = result.payload || {};
+    const card = document.createElement("article");
+    card.className = "card";
+    const refs = (p.references || []).map((r) => `
+      <div class="gen-frame">
+        <div class="gen-frame-head"><span class="gen-frame-purpose">${esc(r.format || "")}</span></div>
+        <p><span class="k">Why it works</span>${esc(r.whyItWorks || "")}</p>
+        <p><span class="k">Your twist</span>${esc(r.twist || "")}</p>
+      </div>`).join("");
+    card.innerHTML = `
+      <div class="card-top"><span class="category">🎬 Reel production pack</span><button class="save-btn" type="button" title="Save idea">☆</button></div>
+      <h3 class="card-title">${esc(title)}</h3>
+      ${refs ? `<div class="sk-section"><h3 class="sk-section-title">🚀 Format references</h3>${refs}</div>` : ""}
+      ${p.script ? `<div class="script-slot"></div>` : ""}
+      <div class="gen-kit"></div>`;
+    if (p.script) {
+      card.querySelector(".script-slot").appendChild(
+        buildScriptEl(p.script, { label: "📝 Hinglish script", title, editKey: `${genId}:script` })
+      );
+    }
+    renderScriptKit(p, card.querySelector(".gen-kit")); // beats, B-roll, BGM, captions, tips
+    wireSave(card.querySelector(".save-btn"), { id: genId, type: "generated", title, data: result });
+    cards.push(card);
+    return cards;
+  }
+
+  if (result.type === "story") {
+    const p = result.payload || {};
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-top">
+        <span class="category">📱 Story</span>
+        ${p.goal ? `<span class="goal">🎯 ${esc(p.goal)}</span>` : ""}
+        <button class="save-btn" type="button" title="Save idea">☆</button>
+      </div>
+      <h3 class="card-title">${esc(title)}</h3>
+      ${p.strategy ? `<p class="subtle" style="margin:-4px 0 12px">${esc(p.strategy)}</p>` : ""}
+      <div class="gen-frames"></div>
+      ${p.cta ? `<div class="reel"><div class="reel-label">📣 CTA</div><p>${esc(p.cta)}</p></div>` : ""}
+      ${(p.postingTips || []).length ? `<div class="sk-section"><h3 class="sk-section-title">💡 Posting tips</h3><ul class="sk-list">${p.postingTips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}`;
+    const frames = card.querySelector(".gen-frames");
+    (p.frames || []).forEach((f) => {
+      const el = document.createElement("div");
+      el.className = "gen-frame";
+      el.innerHTML = `
+        <div class="gen-frame-head"><span class="gen-frame-n">${f.n || ""}</span><span class="gen-frame-purpose">${esc(f.purpose || "")}</span></div>
+        ${f.imageQuery ? `<div class="gen-frame-img"><div class="st-shimmer"></div></div>` : ""}
+        <p>${esc(f.text || "")}</p>
+        ${f.visual ? `<p><span class="k">Visual</span>${esc(f.visual)}</p>` : ""}
+        ${f.interactive && f.interactive !== "none" ? `<p><span class="k">Interactive</span>${esc(f.interactive)}</p>` : ""}
+        ${f.timing ? `<p><span class="k">Timing</span>${esc(f.timing)}</p>` : ""}`;
+      frames.appendChild(el);
+      // Resolve a real photo for the frame via the existing free slide-image pipeline.
+      if (f.imageQuery) {
+        loadSlideImage({ imageQuery: f.imageQuery, imageMood: f.imageMood }).then((url) => {
+          const wrap = el.querySelector(".gen-frame-img");
+          if (wrap && url) wrap.innerHTML = `<img src="${url}" alt="" loading="lazy" />`;
+          else if (wrap) wrap.remove();
+        });
+      }
+    });
+    wireSave(card.querySelector(".save-btn"), { id: genId, type: "generated", title, data: result });
+    cards.push(card);
+    return cards;
+  }
+
+  // normal post
+  const p = result.payload || {};
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="card-top"><span class="category">📝 ${esc(p.format || "Post")}</span><button class="save-btn" type="button" title="Save idea">☆</button></div>
+    <h3 class="card-title">${esc(title)}</h3>
+    <div class="rows">
+      ${p.creativeDirection ? `<div class="row"><span class="k">Creative direction</span><p class="v">${esc(p.creativeDirection)}</p></div>` : ""}
+      ${p.altText ? `<div class="row"><span class="k">Alt text</span><p class="v">${esc(p.altText)}</p></div>` : ""}
+    </div>
+    <div class="gen-post-imgs"></div>
+    <div class="script-caption" style="margin-top:12px">
+      <span class="k">Caption</span>
+      <p class="s-caption">${esc(p.caption || "")}</p>
+      <p class="s-hashtags">${esc((p.hashtags || []).join("  "))}</p>
+    </div>
+    <div class="carousel-actions">
+      <button class="copy-btn cap-btn" type="button">📋 Copy caption</button>
+    </div>`;
+  const imgWrap = card.querySelector(".gen-post-imgs");
+  const opts = Array.isArray(p.imageOptions) ? p.imageOptions : [];
+  if (opts.length) {
+    imgWrap.innerHTML = `<span class="k">📷 Photo options (free to use)</span><div class="sk-options">` +
+      opts.map((o, i) => `
+        <div class="sk-option">
+          <img class="sk-preview" src="${esc(o.thumb || o.url)}" alt="${esc(p.altText || "")}" loading="lazy" />
+          <div class="sk-option-info">
+            <span class="sk-option-tag">#${i + 1} · ${esc(o.source || "")}</span>
+            ${o.credit ? `<span class="sk-option-credit">by ${esc(o.credit)}</span>` : ""}
+          </div>
+          <a class="btn sk-option-dl" href="${esc(o.url)}" target="_blank" rel="noopener">⬇ Use this</a>
+        </div>`).join("") + `</div>`;
+  } else if (p.imageQuery) {
+    imgWrap.innerHTML = `<p class="subtle">🔍 Find a photo: <a href="https://www.pexels.com/search/${encodeURIComponent(p.imageQuery)}/?orientation=portrait" target="_blank" rel="noopener">search "${esc(p.imageQuery)}" on Pexels</a></p>`;
+  } else imgWrap.remove();
+  card.querySelector(".cap-btn").addEventListener(
+    "click",
+    (e) => copyText(e, `${p.caption || ""}\n\n${(p.hashtags || []).join(" ")}`.trim())
+  );
+  wireSave(card.querySelector(".save-btn"), { id: genId, type: "generated", title, data: result });
+  cards.push(card);
+  return cards;
 }

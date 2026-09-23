@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { researchTrends, researchViral, researchPlan, researchCarousels, planScriptKit } from "./lib/gemini.js";
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
-import { searchBrollOptions, searchMusicOptions, mediaConfig } from "./lib/media.js";
+import { mediaConfig } from "./lib/media.js";
+import { resolveKitMedia } from "./lib/kit.js";
 import { transcribeAudio, hasWhisperKey } from "./lib/whisper.js";
 import { planEdit } from "./lib/gemini.js";
 import { probeMedia, extractAudio } from "./lib/editor.js";
@@ -14,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
 import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, storageMode } from "./lib/storage.js";
+import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -94,57 +96,36 @@ app.post("/api/script-kit", async (req, res) => {
   if (script.length > 8000) return res.status(400).json({ error: "Script too long (max 8000 chars).", code: "BAD_REQUEST" });
   try {
     const kit = await planScriptKit(script, NICHE);
-    const beats = Array.isArray(kit.beats) ? kit.beats : [];
-
-    // Resolve several B-roll options per beat (Pexels -> Pixabay fallback, video -> image fallback).
-    const brollJobs = [];
-    for (const beat of beats) {
-      const br = beat.broll;
-      if (!br?.needed || !br?.query) continue;
-      brollJobs.push(
-        searchBrollOptions(br.query, br.media === "image" ? "image" : "video", 4)
-          .then((out) => {
-            br.options = out;
-            if (out[0]) {
-              br.media = out[0].type;
-              br.mediaUrl = out[0].url;
-            }
-          })
-          .catch((err) => {
-            console.warn(`script-kit b-roll "${br.query}" skipped: ${err.message}`);
-          })
-      );
-    }
-    await Promise.all(brollJobs);
-
-    // Resolve several BGM options (Free To Use API, no key needed).
-    const bgmJobs = (kit.bgm || []).map(async (m) => {
-      const query = m.searchQuery || m.name || m.mood || "background music";
-      const fallbacks = [
-        m.mood && `${m.mood} instrumental`,
-        m.energyLevel === "high" ? "energetic upbeat instrumental" : m.energyLevel === "low" ? "ambient chill instrumental" : "background music instrumental",
-        "background music",
-      ].filter(Boolean);
-      try {
-        const tracks = await searchMusicOptions(query, { limit: 4, fallbacks });
-        m.options = tracks;
-        if (tracks[0]) {
-          m.trackUrl = tracks[0].url;
-          m.title = tracks[0].title;
-          m.artist = tracks[0].artist;
-          m.duration = tracks[0].duration;
-          m.source = tracks[0].source;
-        }
-      } catch (err) {
-        console.warn(`script-kit bgm "${query}" skipped: ${err.message}`);
-      }
-    });
-    await Promise.all(bgmJobs);
-
-    res.json({ ...kit, media: mediaConfig() });
+    await resolveKitMedia(kit); // B-roll + BGM from free sources
+    res.json(kit);
   } catch (err) {
     console.error("script-kit failed:", err.message);
     res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SCRIPT_KIT_FAILED" });
+  }
+});
+
+// ---------- Content Generator ----------
+// Central entry point: topic + context + content type -> the type's own
+// workflow module (lib/workflows/<type>.js). Each workflow returns a normalized
+// { type, title, payload } the client renders with its matching card/script UI.
+app.get("/api/generate/types", (_req, res) => {
+  res.json({ types: Object.values(CONTENT_TYPES).map((w) => w.meta) });
+});
+
+app.post("/api/generate", async (req, res) => {
+  const type = String(req.body?.type || "").trim().toLowerCase();
+  const topic = String(req.body?.topic || "").trim();
+  const context = String(req.body?.context || "").trim().slice(0, 3000);
+  if (!topic) return res.status(400).json({ error: "Enter a content topic first.", code: "BAD_REQUEST" });
+  if (topic.length > 300) return res.status(400).json({ error: "Topic too long (max 300 chars).", code: "BAD_REQUEST" });
+  try {
+    const workflow = getWorkflow(type);
+    const result = await workflow.run({ topic, context, niche: NICHE });
+    res.json({ ...result, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    const status = err.code === "NO_API_KEY" || err.code === "BAD_TYPE" ? 400 : 500;
+    if (status >= 500) console.error(`generate/${type} failed:`, err.message);
+    res.status(status).json({ error: err.message, code: err.code || "GENERATE_FAILED" });
   }
 });
 
