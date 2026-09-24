@@ -185,6 +185,117 @@ async function persistEdits() {
   } catch { /* stays in local cache; syncs on next change */ }
 }
 
+/* ---------- generation/analysis history (synced via /api/history) ----------
+   Every result from the Content Generator, Script Kit, and Reel Analyzer is
+   upserted here so it survives refresh and syncs across devices. The views
+   show a compact list (title + type + date + delete); clicking opens the full
+   saved content. */
+const HISTORY_KEY = "reelstudio_history";
+let historyCache = [];
+
+function loadHistoryLocal() { try { historyCache = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { historyCache = []; } }
+function cacheHistoryLocally() { localStorage.setItem(HISTORY_KEY, JSON.stringify(historyCache)); }
+
+async function refreshHistory() {
+  if (requiresPass && !passcode) return;
+  try {
+    const res = await fetch("/api/history", { headers: passHeaders() });
+    if (res.status === 401) return;
+    const d = await res.json();
+    historyCache = d.items || historyCache;
+    cacheHistoryLocally();
+  } catch { /* offline: keep local cache */ }
+}
+
+async function persistHistory() {
+  cacheHistoryLocally();
+  if (requiresPass && !passcode) return;
+  try {
+    await fetch("/api/history", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...passHeaders() },
+      body: JSON.stringify({ items: historyCache }),
+    });
+  } catch { /* stays in local cache; syncs on next change */ }
+}
+
+// Insert or update a history entry. kind: "generated" | "scriptkit" | "analyzer".
+function upsertHistory({ id, kind, type = "", title = "Untitled", data }) {
+  const i = historyCache.findIndex((x) => x.id === id);
+  if (i >= 0) {
+    historyCache[i] = { ...historyCache[i], title, type, data, updatedAt: Date.now() };
+  } else {
+    historyCache.unshift({ id, kind, type, title, data, createdAt: Date.now(), updatedAt: Date.now() });
+  }
+  persistHistory();
+  renderHistoryLists();
+}
+
+async function deleteHistory(id) {
+  const it = historyCache.find((x) => x.id === id);
+  if (!it) return;
+  if (!confirm(`Delete "${it.title}" permanently? This can't be undone.`)) return;
+  historyCache = historyCache.filter((x) => x.id !== id);
+  await persistHistory();
+  renderHistoryLists();
+}
+
+const HISTORY_KIND_LABEL = { generated: "✨ Generated", scriptkit: "🎒 Script Kit", analyzer: "🔍 Analyzed Reel" };
+
+// Compact rows: type chip + clickable title + date + delete.
+function renderHistoryList(el, kind) {
+  const items = historyCache.filter((x) => x.kind === kind);
+  if (!items.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <details class="hist-card card">
+      <summary class="hist-head">📚 History <span class="badge">${items.length}</span></summary>
+      <div class="hist-list"></div>
+    </details>`;
+  const list = el.querySelector(".hist-list");
+  items.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "hist-row";
+    const when = new Date(it.updatedAt || it.createdAt || Date.now());
+    row.innerHTML = `
+      <span class="hist-type">${esc(it.type || HISTORY_KIND_LABEL[it.kind] || it.kind)}</span>
+      <button class="hist-title" type="button">${esc(it.title)}</button>
+      <span class="hist-date">${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+      <button class="hist-del" type="button" title="Delete">🗑</button>`;
+    row.querySelector(".hist-title").addEventListener("click", () => openHistoryItem(it));
+    row.querySelector(".hist-del").addEventListener("click", () => deleteHistory(it.id));
+    list.appendChild(row);
+  });
+}
+
+function renderHistoryLists() {
+  const g = $("#genHistory"); if (g) renderHistoryList(g, "generated");
+  const s = $("#skHistory"); if (s) renderHistoryList(s, "scriptkit");
+  const a = $("#anlzHistory"); if (a) renderHistoryList(a, "analyzer");
+}
+
+// Re-open a saved item in its feature's normal output area.
+function openHistoryItem(it) {
+  if (it.kind === "generated") {
+    switchView("generator");
+    renderGenerated(it.data);
+  } else if (it.kind === "scriptkit") {
+    switchView("scriptkit");
+    renderScriptKit(it.data);
+  } else if (it.kind === "analyzer") {
+    switchView("analyzer");
+    const d = it.data || {};
+    renderAnalysis(d.result || {}, false, it.id);
+    if (d.original) renderOriginal(d.original);
+  }
+}
+
+// Tiny stable string hash for history ids.
+function strHash(s = "") {
+  let h = 7;
+  for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h.toString(36);
+}
+
 function applyStoredEdit(key, sc) {
   const e = editsMap[key];
   // only apply if this script doesn't already carry edits (e.g. from a saved item)
@@ -885,6 +996,7 @@ function switchView(view) {
   if (view === "plan" && !state.plan) loadPlan(false);
   if (view === "carousels" && !state.carousels) loadCarousels(false);
   if (view === "saved") renderSaved();
+  if (view === "generator" || view === "scriptkit" || view === "analyzer") renderHistoryLists();
   if (view !== "saved") $("#meta").textContent = "";
 }
 
@@ -909,7 +1021,9 @@ $("#filters").addEventListener("click", (e) => {
 
 loadLocalCache();
 loadEditsLocal();
+loadHistoryLocal();
 updateSavedBadge();
+renderHistoryLists();
 
 fetch("/api/config")
   .then((r) => r.json())
@@ -920,6 +1034,7 @@ fetch("/api/config")
     mediaConfigClient = { pexels: false, pixabay: false, music: false, ...(d.media || {}) };
     refreshSaved();
     refreshEdits();
+    refreshHistory().then(renderHistoryLists);
   })
   .catch(() => {});
 
@@ -943,6 +1058,7 @@ $("#scriptkitBtn").addEventListener("click", async () => {
     if (!res.ok) { scriptkitStatus(errorHtml(data)); return; }
     scriptkitStatus("");
     renderScriptKit(data);
+    upsertHistory({ id: `kit-${strHash(script)}`, kind: "scriptkit", title: data.title || "Script Kit", data });
   } catch {
     scriptkitStatus(errorHtml({ error: "Could not reach the server. Is it running?" }));
   }
@@ -1291,6 +1407,8 @@ $("#genBtn").addEventListener("click", async () => {
 function renderGenerated(result) {
   const out = $("#genOutput");
   out.innerHTML = "";
+  if (!result._saveId) result._saveId = `gen-${result.type}-${Date.now()}`;
+  upsertHistory({ id: result._saveId, kind: "generated", type: result.type, title: result.title || "Generated content", data: result });
   buildGeneratedCards(result).forEach((card) => out.appendChild(card));
 }
 
@@ -1327,7 +1445,8 @@ function buildGeneratedCards(result) {
       <div class="gen-kit"></div>`;
     if (p.script) {
       card.querySelector(".script-slot").appendChild(
-        buildScriptEl(p.script, { label: "📝 Hinglish script", title, editKey: `${genId}:script` })
+        buildScriptEl(p.script, { label: "📝 Hinglish script", title, editKey: `${genId}:script`,
+          onEdit: () => upsertHistory({ id: genId, kind: "generated", type: result.type, title, data: result }) })
       );
     }
     renderScriptKit(p, card.querySelector(".gen-kit")); // beats, B-roll, BGM, captions, tips
@@ -1514,8 +1633,25 @@ function analysisScriptText() {
   return (r.segments || []).map((s) => s.text || "").filter(Boolean).join("\n");
 }
 
-function renderAnalysis(r, cached) {
+// Persist the current analyzer state (transcript edits, original version) to history.
+let anlzSaveTimer = null;
+function saveAnlzHistory(debounce = false) {
+  if (!anlz.result) return;
+  clearTimeout(anlzSaveTimer);
+  const run = () => upsertHistory({
+    id: anlz.historyId,
+    kind: "analyzer",
+    title: anlz.result.title || "Analyzed Reel",
+    data: { result: anlz.result, original: anlz.original },
+  });
+  if (debounce) anlzSaveTimer = setTimeout(run, 800);
+  else run();
+}
+
+function renderAnalysis(r, cached, historyId) {
   anlz.result = r;
+  anlz.original = null;
+  anlz.historyId = historyId || `anlz-${strHash(r.url || anlz.uploadId || r.title || Date.now())}`;
   const out = $("#anlzOutput");
   const mediaReady = mediaConfigClient.pexels || mediaConfigClient.pixabay;
   const inferredNote = r._mode === "transcript"
@@ -1588,7 +1724,7 @@ function renderAnalysis(r, cached) {
   card.querySelectorAll(".anlz-seg").forEach((seg) => {
     const i = +seg.dataset.i;
     const ta = seg.querySelector(".anlz-seg-ta");
-    ta.addEventListener("input", () => { anlz.result.segments[i].text = ta.value; });
+    ta.addEventListener("input", () => { anlz.result.segments[i].text = ta.value; saveAnlzHistory(true); });
     seg.querySelector(".anlz-rephrase").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
@@ -1604,6 +1740,7 @@ function renderAnalysis(r, cached) {
         if (res.ok && d.rephrased) {
           ta.value = d.rephrased;
           anlz.result.segments[i].text = d.rephrased;
+          saveAnlzHistory();
         } else {
           btn.textContent = d.error || "failed";
           setTimeout(() => (btn.textContent = "↺ Rephrase"), 2000);
@@ -1618,6 +1755,8 @@ function renderAnalysis(r, cached) {
   });
 
   card.querySelector(".anlz-orig-btn").addEventListener("click", (e) => makeOriginal(e.currentTarget));
+
+  saveAnlzHistory();
 
   if (!mediaReady) {
     card.insertAdjacentHTML("beforeend",
@@ -1653,6 +1792,7 @@ async function makeOriginal(btn) {
 }
 
 function renderOriginal(d) {
+  anlz.original = d;
   const out = $("#anlzOrigOut");
   out.innerHTML = "";
   const wrap = document.createElement("div");
@@ -1674,7 +1814,12 @@ function renderOriginal(d) {
   // Editable script card (same component used everywhere else).
   const sc = { durationSeconds: d.durationSeconds, hook: d.hook, onScreenHook: d.onScreenHook, lines: d.lines, caption: d.caption, hashtags: d.hashtags };
   wrap.querySelector(".orig-script-slot").appendChild(
-    buildScriptEl(sc, { label: "✅ Your original script", title: anlz.result?.title || "Reel", variant: "improved" })
+    buildScriptEl(sc, { label: "✅ Your original script", title: anlz.result?.title || "Reel", variant: "improved",
+      editKey: `${anlz.historyId}:orig`,
+      onEdit: () => {
+        Object.assign(anlz.original, { hook: sc.hook, onScreenHook: sc.onScreenHook, lines: sc.lines, caption: sc.caption, hashtags: sc.hashtags });
+        saveAnlzHistory();
+      } })
   );
 
   // Per-line tools: rephrase + lazy B-roll.
@@ -1710,6 +1855,7 @@ function renderOriginal(d) {
           ln.say = r.rephrased;
           row.querySelector(".sk-beat-say").textContent = r.rephrased;
           if (sc.lines?.[i]) sc.lines[i].say = r.rephrased;
+          saveAnlzHistory();
         }
       } catch {} finally {
         b.disabled = false;
@@ -1781,4 +1927,6 @@ function renderOriginal(d) {
       b.textContent = "🔊 Find downloadable tracks";
     }
   });
+
+  saveAnlzHistory();
 }

@@ -14,7 +14,7 @@ import busboy from "busboy";
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
-import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, storageMode } from "./lib/storage.js";
+import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, getHistoryList, setHistoryList, storageMode } from "./lib/storage.js";
 import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
 import { normalizeReelUrl, downloadReel, analyzeReel, makeOriginalScript, rephrasePart } from "./lib/analyzer.js";
 import { searchBrollOptions, searchMusicOptions } from "./lib/media.js";
@@ -198,6 +198,25 @@ app.get("/api/edits", requirePass, async (_req, res) => {
 app.put("/api/edits", requirePass, async (req, res) => {
   try {
     await setEditsMap(req.body?.items || {});
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Generation/analysis history (Content Generator, Script Kit, Reel Analyzer).
+// Same whole-list pattern + passcode gate as /api/saved so history syncs across
+// devices; the client upserts items and deletes by rewriting the list.
+app.get("/api/history", requirePass, async (_req, res) => {
+  try {
+    res.json({ items: await getHistoryList() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.put("/api/history", requirePass, async (req, res) => {
+  try {
+    await setHistoryList(req.body?.items || []);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

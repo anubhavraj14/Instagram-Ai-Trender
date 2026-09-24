@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <header class="topbar">
@@ -100,6 +100,7 @@
     <div id="view-generator" class="view hidden">
       <h2 class="section-title">✨ Content Generator</h2>
       <p class="subtle" style="margin:-6px 0 18px">Enter a topic, pick a format, and get ready-to-use content. Each format runs its own generation workflow.</p>
+      <div id="genHistory"></div>
       <section class="card editor-card">
         <label class="gen-label" for="genTopic">Topic</label>
         <input id="genTopic" class="gen-input" type="text" maxlength="300" placeholder="e.g. 3 mistakes new creators make with hooks" />
@@ -124,6 +125,7 @@
     <div id="view-scriptkit" class="view hidden">
       <h2 class="section-title">🎒 Script Kit</h2>
       <p class="subtle" style="margin:-6px 0 18px">Paste any Reel script and get a complete shoot-and-edit kit: B-roll clips you can download, background music that psychologically holds attention, sound effects, captions, hashtags, and editing tips.</p>
+      <div id="skHistory"></div>
       <section class="card editor-card">
         <textarea id="scriptkitInput" class="script-ta editor-script" rows="10" placeholder="Paste your full script here (what the creator will say). Hindi/English/Hinglish all work."></textarea>
         <div id="scriptkitStatus" class="status" style="padding:16px 0"></div>
@@ -138,6 +140,7 @@
     <div id="view-analyzer" class="view hidden">
       <h2 class="section-title">🔍 Reel Analyzer</h2>
       <p class="subtle" style="margin:-6px 0 18px">Paste any Instagram Reel URL — I'll transcribe the script, break down the hook/structure/CTA, map the visuals, and help you build your own original version with matching B-roll and music.</p>
+      <div id="anlzHistory"></div>
       <section class="card editor-card">
         <label class="gen-label" for="anlzUrl">Instagram Reel URL</label>
         <input id="anlzUrl" class="gen-input" type="url" placeholder="https://www.instagram.com/reel/…" />
@@ -290,6 +293,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
