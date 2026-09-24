@@ -16,6 +16,8 @@ import path from "node:path";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
 import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, storageMode } from "./lib/storage.js";
 import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
+import { normalizeReelUrl, downloadReel, analyzeReel, makeOriginalScript, rephrasePart } from "./lib/analyzer.js";
+import { searchBrollOptions, searchMusicOptions } from "./lib/media.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -401,6 +403,142 @@ app.get("/api/reel/:id/output", (req, res) => {
   const f = join(OUTPUTS, `${req.params.id}.mp4`);
   if (!fs.existsSync(f)) return res.status(404).json({ error: "Not ready", code: "NOT_READY" });
   res.sendFile(f);
+});
+
+// ---------------- Reel Analyzer ----------------
+// Paste an Instagram Reel URL (or reuse a file uploaded via /api/reel/upload) ->
+// download the video -> ONE Gemini vision pass transcribes speech + breaks down
+// hook/structure/CTA and maps visuals to the script. Result is cached by URL so
+// the same Reel never costs a second analysis.
+const analyzeJobs = new Map();
+
+app.post("/api/analyze", async (req, res) => {
+  const url = normalizeReelUrl(req.body?.url || "");
+  const uploadId = String(req.body?.uploadId || "").trim();
+  if (!url && !uploadId) {
+    return res.status(400).json({ error: "Paste an Instagram Reel URL or upload the video file.", code: "BAD_REQUEST" });
+  }
+  const cacheKey = "anlz:" + createHash("sha1").update(url || `upload:${uploadId}`).digest("hex");
+  try {
+    const cached = await getCache(cacheKey).catch(() => null);
+    if (cached?.result) return res.json({ result: cached.result, cached: true });
+  } catch {}
+
+  const id = newJobId();
+  analyzeJobs.set(id, { status: "working", step: "Starting…", createdAt: Date.now() });
+  res.json({ id, cached: false });
+
+  const job = analyzeJobs.get(id);
+  const step = (s) => { job.step = s; };
+  (async () => {
+    let file, meta = {};
+    if (url) {
+      step("Downloading Reel");
+      const dl = await downloadReel(url, join(UPLOADS, `anlz-${id}`));
+      file = dl.file;
+      meta = dl.meta;
+    } else {
+      const up = jobs.get(uploadId);
+      if (!up?.file || !fs.existsSync(up.file)) {
+        const e = new Error("Uploaded video not found — upload it again.");
+        e.code = "NOT_FOUND";
+        throw e;
+      }
+      file = up.file;
+    }
+    const result = await analyzeReel({ file, meta, onStep: step });
+    result.url = url || null;
+    job.result = result;
+    job.status = "done";
+    job.step = "Done";
+    await setCache(cacheKey, { result, cachedAt: Date.now() }).catch(() => {});
+  })().catch((e) => {
+    job.status = "failed";
+    job.error = e.message;
+    console.error("analyze failed:", e.message);
+  });
+});
+
+app.get("/api/analyze/:id/status", (req, res) => {
+  const job = analyzeJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Job not found", code: "NOT_FOUND" });
+  res.json({ status: job.status, step: job.step, error: job.error, result: job.result });
+});
+
+// Original version of the analyzed script (on demand — one AI call).
+app.post("/api/analyze/original", async (req, res) => {
+  const analysis = req.body?.analysis || {};
+  const script = String(req.body?.script || "").trim().slice(0, 8000);
+  if (!script) return res.status(400).json({ error: "No script to adapt.", code: "BAD_REQUEST" });
+  const cacheKey = "anlz-orig:" + createHash("sha1").update(script).digest("hex");
+  try {
+    const cached = await getCache(cacheKey).catch(() => null);
+    if (cached?.result) return res.json({ ...cached.result, cached: true });
+    const result = await makeOriginalScript(analysis, script, NICHE);
+    await setCache(cacheKey, { result, cachedAt: Date.now() }).catch(() => {});
+    res.json({ ...result, cached: false });
+  } catch (err) {
+    console.error("original script failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "ORIG_FAILED" });
+  }
+});
+
+// Rephrase one selected line/section, preserving meaning.
+app.post("/api/analyze/rephrase", async (req, res) => {
+  const text = String(req.body?.text || "").trim().slice(0, 2000);
+  const context = String(req.body?.context || "").trim().slice(0, 4000);
+  if (!text) return res.status(400).json({ error: "Nothing to rephrase.", code: "BAD_REQUEST" });
+  try {
+    const rephrased = await rephrasePart(text, context);
+    res.json({ rephrased });
+  } catch (err) {
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "REPHRASE_FAILED" });
+  }
+});
+
+// Lazy B-roll lookup for the new script — only runs when the user asks, and
+// each query is cached so re-clicks are free.
+app.post("/api/analyze/broll", async (req, res) => {
+  const query = String(req.body?.query || "").trim().slice(0, 120);
+  const media = req.body?.media === "image" ? "image" : "video";
+  if (!query) return res.status(400).json({ error: "Missing query", code: "BAD_QUERY" });
+  const key = "broll:" + createHash("sha1").update(`${query}|${media}`).digest("hex");
+  try {
+    const cached = await getCache(key).catch(() => null);
+    if (cached?.options) return res.json({ ...cached, cached: true });
+    const options = await searchBrollOptions(query, media, 4);
+    await setCache(key, { options, cachedAt: Date.now() }).catch(() => {});
+    res.json({ options, cached: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: "BROLL_FAILED" });
+  }
+});
+
+// Lazy BGM resolution — searchQuery list -> downloadable free tracks.
+app.post("/api/analyze/bgm", async (req, res) => {
+  const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 4) : [];
+  if (!items.length) return res.status(400).json({ error: "Missing items", code: "BAD_REQUEST" });
+  try {
+    const out = await Promise.all(items.map(async (m) => {
+      const q = String(m.searchQuery || m.mood || "background music").slice(0, 80);
+      const key = "bgm:" + createHash("sha1").update(q).digest("hex");
+      const cached = await getCache(key).catch(() => null);
+      if (cached?.tracks) return { ...m, tracks: cached.tracks };
+      try {
+        const tracks = await searchMusicOptions(q, {
+          limit: 3,
+          fallbacks: [m.mood && `${m.mood} instrumental`, "background music instrumental"].filter(Boolean),
+        });
+        await setCache(key, { tracks, cachedAt: Date.now() }).catch(() => {});
+        return { ...m, tracks };
+      } catch {
+        return { ...m, tracks: [] };
+      }
+    }));
+    res.json({ items: out });
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: "BGM_FAILED" });
+  }
 });
 
 app.listen(PORT, () => {

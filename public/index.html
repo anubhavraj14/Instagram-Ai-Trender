@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#080a10" />
   <title>Reel Studio · Trends & Viral Scripts</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=17" />
 </head>
 <body>
   <header class="topbar">
@@ -25,6 +26,7 @@
       <button class="nav-btn" data-view="carousels">🖼️ Carousels</button>
       <button class="nav-btn" data-view="generator">✨ Content Generator</button>
       <button class="nav-btn" data-view="scriptkit">🎒 Script Kit</button>
+      <button class="nav-btn" data-view="analyzer">🔍 Reel Analyzer</button>
       <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
     </nav>
@@ -130,6 +132,27 @@
         </div>
         <div id="scriptkitOutput"></div>
       </section>
+    </div>
+
+    <!-- REEL ANALYZER VIEW -->
+    <div id="view-analyzer" class="view hidden">
+      <h2 class="section-title">🔍 Reel Analyzer</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Paste any Instagram Reel URL — I'll transcribe the script, break down the hook/structure/CTA, map the visuals, and help you build your own original version with matching B-roll and music.</p>
+      <section class="card editor-card">
+        <label class="gen-label" for="anlzUrl">Instagram Reel URL</label>
+        <input id="anlzUrl" class="gen-input" type="url" placeholder="https://www.instagram.com/reel/…" />
+        <div class="anlz-or">
+          <span class="subtle">or upload the Reel file if the download is blocked</span>
+          <input type="file" id="anlzFile" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
+          <button id="anlzUploadBtn" class="copy-btn" type="button">📁 Choose video</button>
+          <span id="anlzFileName" class="subtle"></span>
+        </div>
+        <div class="carousel-actions">
+          <button id="anlzBtn" class="btn dl-btn" type="button">🔍 Analyze Reel</button>
+        </div>
+        <div id="anlzStatus" class="status" style="padding:16px 0 0"></div>
+      </section>
+      <div id="anlzOutput"></div>
     </div>
 
     <!-- REEL EDITOR VIEW -->
@@ -267,6 +290,6 @@
     </article>
   </template>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

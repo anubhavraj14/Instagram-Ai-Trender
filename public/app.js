@@ -877,9 +877,9 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator") ? "none" : "";
+  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer") ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
@@ -948,6 +948,45 @@ $("#scriptkitBtn").addEventListener("click", async () => {
   }
 });
 
+// Shared HTML for a downloadable stock-media option (B-roll video/image).
+function brollOptionHtml(opt, idx) {
+  const isVideo = opt.type === "video";
+  const preview = isVideo
+    ? `<video class="sk-preview" src="${esc(opt.url)}" poster="${esc(opt.thumb || "")}" preload="metadata" controls playsinline></video>`
+    : `<img class="sk-preview" src="${esc(opt.thumb || opt.url)}" alt="" loading="lazy" />`;
+  return `
+    <div class="sk-option">
+      ${preview}
+      <div class="sk-option-info">
+        <span class="sk-option-tag">#${idx + 1} · ${esc(opt.type || "media")} · ${esc(opt.source || "")}</span>
+        ${opt.credit ? `<span class="sk-option-credit">by ${esc(opt.credit)}</span>` : ""}
+        ${opt.duration ? `<span class="sk-option-credit">${Math.round(opt.duration)}s</span>` : ""}
+        ${opt.pageUrl ? `<a class="sk-option-credit" href="${esc(opt.pageUrl)}" target="_blank" rel="noopener">source</a>` : ""}
+      </div>
+      <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Use this</a>
+    </div>
+  `;
+}
+
+// Shared HTML for a downloadable music-track option.
+function musicOptionHtml(opt, idx) {
+  return `
+    <div class="sk-option sk-music-option">
+      <div class="sk-music-head">
+        <strong>${esc(opt.title || "Untitled")}</strong>
+        <span class="sk-badge">${esc(opt.genre || "music")}</span>
+      </div>
+      <audio class="sk-audio" src="${esc(opt.url)}" preload="metadata" controls></audio>
+      <div class="sk-option-info">
+        <span class="sk-option-credit">by ${esc(opt.artist || "Unknown")}</span>
+        <span class="sk-option-credit">${opt.duration ? Math.round(opt.duration) + "s" : ""}</span>
+        <span class="sk-option-credit">${esc(opt.source || "")}</span>
+      </div>
+      <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Download this</a>
+    </div>
+  `;
+}
+
 function renderScriptKit(kit, out = $("#scriptkitOutput")) {
   const mediaReady = mediaConfigClient.pexels || mediaConfigClient.pixabay;
   const noticeLines = [];
@@ -965,24 +1004,6 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
         ${hook.improvedLine ? `<div class="sk-improve"><span class="k">Stronger alternative</span><p>${esc(hook.improvedLine)}</p></div>` : ""}
       </div>
     </div>`;
-
-  function renderBrollOption(opt, idx) {
-    const isVideo = opt.type === "video";
-    const preview = isVideo
-      ? `<video class="sk-preview" src="${esc(opt.url)}" poster="${esc(opt.thumb || "")}" preload="metadata" controls playsinline></video>`
-      : `<img class="sk-preview" src="${esc(opt.thumb || opt.url)}" alt="" loading="lazy" />`;
-    return `
-      <div class="sk-option">
-        ${preview}
-        <div class="sk-option-info">
-          <span class="sk-option-tag">#${idx + 1} · ${esc(opt.type || "media")} · ${esc(opt.source || "")}</span>
-          ${opt.credit ? `<span class="sk-option-credit">by ${esc(opt.credit)}</span>` : ""}
-          ${opt.duration ? `<span class="sk-option-credit">${Math.round(opt.duration)}s</span>` : ""}
-        </div>
-        <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Use this</a>
-      </div>
-    `;
-  }
 
   const beats = (kit.beats || []).map((b, i) => {
     const br = b.broll || {};
@@ -1011,31 +1032,13 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
           </div>
           <p class="sk-broll-query">🔍 ${esc(br.query || "")}</p>
           <p class="sk-text">${esc(br.why || "")}</p>
-          ${hasOptions ? `<div class="sk-options">${options.map(renderBrollOption).join("")}</div>` : ""}
+          ${hasOptions ? `<div class="sk-options">${options.map(brollOptionHtml).join("")}</div>` : ""}
           ${fallbackLinks}
         </div>
       ` : ""}
       ${b.soundEffect ? `<p class="sk-sfx">🔊 ${esc(b.soundEffect)}</p>` : ""}
     </div>`;
   }).join("");
-
-  function renderMusicOption(opt, idx) {
-    return `
-      <div class="sk-option sk-music-option">
-        <div class="sk-music-head">
-          <strong>${esc(opt.title || "Untitled")}</strong>
-          <span class="sk-badge">${esc(opt.genre || "music")}</span>
-        </div>
-        <audio class="sk-audio" src="${esc(opt.url)}" preload="metadata" controls></audio>
-        <div class="sk-option-info">
-          <span class="sk-option-credit">by ${esc(opt.artist || "Unknown")}</span>
-          <span class="sk-option-credit">${opt.duration ? Math.round(opt.duration) + "s" : ""}</span>
-          <span class="sk-option-credit">${esc(opt.source || "")}</span>
-        </div>
-        <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener">⬇ Download this</a>
-      </div>
-    `;
-  }
 
   const bgm = (kit.bgm || []).map((m) => {
     const options = Array.isArray(m.options) ? m.options : (m.trackUrl ? [{ url: m.trackUrl, title: m.title, artist: m.artist, duration: m.duration, genre: m.mood || m.genre, source: m.source }] : []);
@@ -1048,7 +1051,7 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
       </div>
       <p class="sk-text"><strong>Why it holds attention:</strong> ${esc(m.whyItRetains || "")}</p>
       <p class="sk-meta">Energy: ${esc(m.energyLevel || "")} · Start: ${esc(m.whenToStart || "")}</p>
-      ${hasOptions ? `<p class="sk-text">Preview and pick one:</p><div class="sk-options">${options.map(renderMusicOption).join("")}</div>` : ""}
+      ${hasOptions ? `<p class="sk-text">Preview and pick one:</p><div class="sk-options">${options.map(musicOptionHtml).join("")}</div>` : ""}
       ${!hasOptions && m.whereToFind ? `<p class="sk-meta">Find it on: ${esc(m.whereToFind || "")}</p>` : ""}
     </div>
   `;
@@ -1417,4 +1420,365 @@ function buildGeneratedCards(result) {
   wireSave(card.querySelector(".save-btn"), { id: genId, type: "generated", title, data: result });
   cards.push(card);
   return cards;
+}
+
+/* ---------- Reel Analyzer ---------- */
+const anlz = { poll: null, uploadId: null, result: null, original: null };
+const anlzStatus = (html) => { $("#anlzStatus").innerHTML = html; };
+
+function fmtTs(s = 0) {
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+// Optional manual upload path — reuses the existing /api/reel/upload endpoint.
+$("#anlzUploadBtn").addEventListener("click", () => $("#anlzFile").click());
+$("#anlzFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 120 * 1024 * 1024) {
+    anlzStatus(errorHtml({ error: "Video too large — keep it under 120MB." }));
+    return;
+  }
+  $("#anlzFileName").textContent = `uploading ${file.name}…`;
+  const fd = new FormData();
+  fd.append("video", file);
+  try {
+    const res = await fetch("/api/reel/upload", { method: "POST", body: fd });
+    const d = await res.json();
+    if (!res.ok) { $("#anlzFileName").textContent = ""; anlzStatus(errorHtml(d)); return; }
+    anlz.uploadId = d.id;
+    $("#anlzFileName").textContent = `✓ ${file.name}`;
+    anlzStatus("");
+  } catch {
+    $("#anlzFileName").textContent = "";
+    anlzStatus(errorHtml({ error: "Upload failed — check your connection." }));
+  }
+});
+
+$("#anlzBtn").addEventListener("click", async () => {
+  const url = $("#anlzUrl").value.trim();
+  if (!url && !anlz.uploadId) {
+    anlzStatus(errorHtml({ error: "Paste an Instagram Reel URL (or upload the video file)." }));
+    return;
+  }
+  $("#anlzBtn").disabled = true;
+  $("#anlzOutput").innerHTML = "";
+  anlz.original = null;
+  anlzStatus(`<div class="loading"><div class="spinner"></div><p id="anlzStep">Starting…</p></div>`);
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url || undefined, uploadId: anlz.uploadId || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) { anlzStatus(errorHtml(data)); return; }
+    if (data.result) { anlzStatus(""); renderAnalysis(data.result, true); return; }
+    pollAnalyze(data.id);
+  } catch {
+    anlzStatus(errorHtml({ error: "Could not reach the server. Is it running?" }));
+  } finally {
+    $("#anlzBtn").disabled = false;
+  }
+});
+
+function pollAnalyze(id) {
+  clearInterval(anlz.poll);
+  anlz.poll = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/analyze/${id}/status`);
+      const d = await res.json();
+      if (!res.ok) {
+        clearInterval(anlz.poll);
+        anlzStatus(errorHtml({ error: d.error || "Analysis job lost — the server may have restarted." }));
+        return;
+      }
+      const stepEl = $("#anlzStep");
+      if (stepEl) stepEl.textContent = d.step || "Working…";
+      if (d.status === "done") {
+        clearInterval(anlz.poll);
+        anlzStatus("");
+        renderAnalysis(d.result, false);
+      } else if (d.status === "failed") {
+        clearInterval(anlz.poll);
+        anlzStatus(errorHtml({ error: d.error || "Analysis failed." }));
+      }
+    } catch { /* keep polling */ }
+  }, 2000);
+}
+
+// Plain-text version of the analyzed (possibly user-edited) transcript.
+function analysisScriptText() {
+  const r = anlz.result || {};
+  return (r.segments || []).map((s) => s.text || "").filter(Boolean).join("\n");
+}
+
+function renderAnalysis(r, cached) {
+  anlz.result = r;
+  const out = $("#anlzOutput");
+  const mediaReady = mediaConfigClient.pexels || mediaConfigClient.pixabay;
+  const inferredNote = r._mode === "transcript"
+    ? `<p class="notice">⚠️ Couldn't access the video frames — visuals below are inferred from the spoken script.</p>` : "";
+  const cacheNote = cached ? `<p class="notice ok">⚡ Served from cache — no new AI calls were used.</p>` : "";
+
+  const segments = (r.segments || []).map((s, i) => `
+    <div class="anlz-seg" data-i="${i}">
+      <div class="anlz-seg-head">
+        <span class="sk-beat-time">${fmtTs(s.start)}–${fmtTs(s.end)}</span>
+        <span class="beat-part ${(s.part || "").split(" ")[0].toLowerCase()}">${esc(s.part || "seg")}</span>
+        <button class="copy-btn anlz-rephrase" type="button" title="Rephrase this line">↺ Rephrase</button>
+      </div>
+      <textarea class="anlz-seg-ta" rows="2">${esc(s.text || "")}</textarea>
+      ${s.onScreen ? `<p class="sk-beat-ost">🅣 ${esc(s.onScreen)}</p>` : ""}
+    </div>`).join("");
+
+  const visuals = (r.visuals || []).map((v) => `
+    <div class="anlz-vis">
+      <span class="sk-beat-time">${fmtTs(v.start)}–${fmtTs(v.end)}</span>
+      <span class="sk-badge watch">${esc(v.type || "visual")}</span>
+      <p class="sk-text">${esc(v.description || "")}${v.mapsToSegment != null && r.segments?.[v.mapsToSegment] ? ` <span class="subtle">→ supports: "${esc((r.segments[v.mapsToSegment].text || "").slice(0, 60))}…"</span>` : ""}</p>
+      ${v.sourceUrl ? `<a class="sk-option-credit" href="${esc(v.sourceUrl)}" target="_blank" rel="noopener">🔗 source</a>` : ""}
+    </div>`).join("");
+
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `
+    <div class="card-top">
+      <span class="category">🔍 Reel analysis</span>
+      ${r.spokenLanguage ? `<span class="category">${esc(r.spokenLanguage)}</span>` : ""}
+      ${r.durationSeconds ? `<span class="goal">~${Math.round(r.durationSeconds)}s</span>` : ""}
+    </div>
+    <h3 class="card-title">${esc(r.title || "Analyzed Reel")}</h3>
+    ${r.url ? `<p class="subtle"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></p>` : ""}
+    ${cacheNote}${inferredNote}
+    <div class="rows">
+      ${r.coreIdea ? `<div class="row"><span class="k">Core idea</span><p class="v">${esc(r.coreIdea)}</p></div>` : ""}
+      ${r.structure ? `<div class="row"><span class="k">Structure</span><p class="v">${esc(r.structure)}</p></div>` : ""}
+    </div>
+    <div class="sk-section">
+      <h3 class="sk-section-title">🪝 Hook</h3>
+      <div class="sk-block">
+        <p class="sk-line">${esc(r.hook?.text || "")}</p>
+        ${r.hook?.start != null ? `<span class="sk-beat-time">${fmtTs(r.hook.start)}–${fmtTs(r.hook.end)}</span>` : ""}
+        <p class="sk-text">${esc(r.hook?.why || "")}</p>
+      </div>
+    </div>
+    <div class="sk-section">
+      <h3 class="sk-section-title">📝 Transcript <span class="subtle">— editable</span></h3>
+      <div class="anlz-segs">${segments}</div>
+      <div class="carousel-actions" style="margin-top:8px">
+        <button class="copy-btn anlz-copy-script" type="button">📋 Copy script</button>
+      </div>
+    </div>
+    ${(r.mainPoints || []).length ? `<div class="sk-section"><h3 class="sk-section-title">🎯 Main points</h3><ul class="sk-list">${r.mainPoints.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>` : ""}
+    ${r.cta?.text ? `<div class="sk-section"><h3 class="sk-section-title">📣 CTA</h3><div class="sk-block"><p class="sk-line">${esc(r.cta.text)}</p>${r.cta.start != null ? `<span class="sk-beat-time">${fmtTs(r.cta.start)}–${fmtTs(r.cta.end)}</span>` : ""}</div></div>` : ""}
+    ${visuals ? `<div class="sk-section"><h3 class="sk-section-title">🎞️ Visuals & B-roll map</h3><div class="anlz-viss">${visuals}</div></div>` : ""}
+    <div class="carousel-actions" style="margin-top:14px">
+      <button class="btn dl-btn anlz-orig-btn" type="button">✨ Create my original version</button>
+    </div>
+    <div id="anlzOrigOut"></div>`;
+  out.innerHTML = "";
+  out.appendChild(card);
+
+  card.querySelector(".anlz-copy-script").addEventListener("click", (e) => copyText(e, analysisScriptText()));
+
+  // Editable transcript: keep the model in sync so "original version" + rephrase
+  // always use the latest wording.
+  card.querySelectorAll(".anlz-seg").forEach((seg) => {
+    const i = +seg.dataset.i;
+    const ta = seg.querySelector(".anlz-seg-ta");
+    ta.addEventListener("input", () => { anlz.result.segments[i].text = ta.value; });
+    seg.querySelector(".anlz-rephrase").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const orig = ta.value;
+      btn.textContent = "…";
+      try {
+        const res = await fetch("/api/analyze/rephrase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: orig, context: analysisScriptText() }),
+        });
+        const d = await res.json();
+        if (res.ok && d.rephrased) {
+          ta.value = d.rephrased;
+          anlz.result.segments[i].text = d.rephrased;
+        } else {
+          btn.textContent = d.error || "failed";
+          setTimeout(() => (btn.textContent = "↺ Rephrase"), 2000);
+        }
+      } catch {
+        btn.textContent = "↺ Rephrase";
+      } finally {
+        btn.disabled = false;
+        if (btn.textContent === "…") btn.textContent = "↺ Rephrase";
+      }
+    });
+  });
+
+  card.querySelector(".anlz-orig-btn").addEventListener("click", (e) => makeOriginal(e.currentTarget));
+
+  if (!mediaReady) {
+    card.insertAdjacentHTML("beforeend",
+      `<p class="notice">🎞️ B-roll download links need a free stock-media key (<code>PEXELS_API_KEY</code> or <code>PIXABAY_API_KEY</code>).</p>`);
+  }
+}
+
+// On demand: one AI call -> genuinely new script + B-roll queries + BGM ideas.
+async function makeOriginal(btn) {
+  const script = analysisScriptText();
+  if (!script) return;
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = "Writing your version…";
+  const out = $("#anlzOrigOut");
+  out.innerHTML = `<div class="loading"><div class="spinner"></div><p>Creating an original version of the script…</p></div>`;
+  try {
+    const res = await fetch("/api/analyze/original", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysis: anlz.result, script }),
+    });
+    const d = await res.json();
+    if (!res.ok) { out.innerHTML = errorHtml(d); return; }
+    anlz.original = d;
+    renderOriginal(d);
+  } catch {
+    out.innerHTML = errorHtml({ error: "Could not reach the server." });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+function renderOriginal(d) {
+  const out = $("#anlzOrigOut");
+  out.innerHTML = "";
+  const wrap = document.createElement("div");
+  wrap.className = "sk-section";
+  wrap.innerHTML = `
+    <h3 class="sk-section-title">✨ Your original version</h3>
+    ${d.cached ? `<p class="notice ok">⚡ Cached — no new AI calls.</p>` : ""}
+    ${d.whatsDifferent ? `<div class="whatsDiff"><span class="k">What's different</span><p class="whatsDiff-txt">${esc(d.whatsDifferent)}</p></div>` : ""}
+    <div class="orig-script-slot"></div>
+    <div class="anlz-orig-lines"></div>
+    <div class="sk-section">
+      <h3 class="sk-section-title">🎵 BGM recommendations</h3>
+      <div class="anlz-bgm-list"></div>
+      <div class="carousel-actions"><button class="copy-btn anlz-find-bgm" type="button">🔊 Find downloadable tracks</button></div>
+      <div class="anlz-bgm-tracks"></div>
+    </div>`;
+  out.appendChild(wrap);
+
+  // Editable script card (same component used everywhere else).
+  const sc = { durationSeconds: d.durationSeconds, hook: d.hook, onScreenHook: d.onScreenHook, lines: d.lines, caption: d.caption, hashtags: d.hashtags };
+  wrap.querySelector(".orig-script-slot").appendChild(
+    buildScriptEl(sc, { label: "✅ Your original script", title: anlz.result?.title || "Reel", variant: "improved" })
+  );
+
+  // Per-line tools: rephrase + lazy B-roll.
+  const linesEl = wrap.querySelector(".anlz-orig-lines");
+  (d.lines || []).forEach((ln, i) => {
+    const row = document.createElement("div");
+    row.className = "anlz-seg";
+    row.innerHTML = `
+      <div class="anlz-seg-head">
+        <span class="beat-part ${(ln.part || "").split(" ")[0].toLowerCase()}">${esc(ln.part || "")}</span>
+        <button class="copy-btn anlz-oline-rephrase" type="button">↺ Rephrase</button>
+      </div>
+      <p class="sk-beat-say">${esc(ln.say || "")}</p>
+      ${ln.brollQuery ? `
+        <div class="anlz-broll">
+          <button class="copy-btn anlz-find-broll" type="button">🎞️ Find B-roll: "${esc(ln.brollQuery)}"</button>
+          <div class="anlz-broll-opts"></div>
+        </div>` : ""}`;
+    linesEl.appendChild(row);
+
+    row.querySelector(".anlz-oline-rephrase").addEventListener("click", async (e) => {
+      const b = e.currentTarget;
+      b.disabled = true;
+      b.textContent = "…";
+      try {
+        const res = await fetch("/api/analyze/rephrase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: ln.say, context: (d.lines || []).map((x) => x.say).join("\n") }),
+        });
+        const r = await res.json();
+        if (res.ok && r.rephrased) {
+          ln.say = r.rephrased;
+          row.querySelector(".sk-beat-say").textContent = r.rephrased;
+          if (sc.lines?.[i]) sc.lines[i].say = r.rephrased;
+        }
+      } catch {} finally {
+        b.disabled = false;
+        b.textContent = "↺ Rephrase";
+      }
+    });
+
+    const brollBtn = row.querySelector(".anlz-find-broll");
+    if (brollBtn) {
+      brollBtn.addEventListener("click", async () => {
+        brollBtn.disabled = true;
+        brollBtn.textContent = "Searching…";
+        const optsEl = row.querySelector(".anlz-broll-opts");
+        try {
+          const res = await fetch("/api/analyze/broll", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: ln.brollQuery }),
+          });
+          const r = await res.json();
+          if (res.ok && (r.options || []).length) {
+            optsEl.innerHTML = `<div class="sk-options">${r.options.map(brollOptionHtml).join("")}</div>`;
+            brollBtn.classList.add("hidden");
+          } else {
+            optsEl.innerHTML = `<p class="sk-text">No stock media found — <a href="https://www.pexels.com/search/videos/${encodeURIComponent(ln.brollQuery)}/?orientation=portrait" target="_blank" rel="noopener">search Pexels manually</a></p>`;
+            brollBtn.disabled = false;
+            brollBtn.textContent = `🎞️ Retry: "${ln.brollQuery}"`;
+          }
+        } catch {
+          brollBtn.disabled = false;
+          brollBtn.textContent = `🎞️ Find B-roll: "${ln.brollQuery}"`;
+        }
+      });
+    }
+  });
+
+  // BGM suggestions + lazy track resolution.
+  const bgmList = wrap.querySelector(".anlz-bgm-list");
+  bgmList.innerHTML = (d.bgm || []).map((m) => `
+    <div class="sk-bgm">
+      <div class="sk-bgm-head"><strong>${esc(m.name || "")}</strong><span class="sk-badge watch">${esc((m.mood || "").toUpperCase())}</span></div>
+      <p class="sk-text">${esc(m.why || "")}</p>
+      <p class="sk-meta">Search: "${esc(m.searchQuery || "")}"</p>
+    </div>`).join("") || `<p class="subtle">No BGM suggestions.</p>`;
+
+  wrap.querySelector(".anlz-find-bgm").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    if (!(d.bgm || []).length) return;
+    b.disabled = true;
+    b.textContent = "Searching free music…";
+    const tracksEl = wrap.querySelector(".anlz-bgm-tracks");
+    try {
+      const res = await fetch("/api/analyze/bgm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: d.bgm }),
+      });
+      const r = await res.json();
+      if (res.ok) {
+        tracksEl.innerHTML = (r.items || []).map((m) => `
+          <div class="sk-bgm">
+            <div class="sk-bgm-head"><strong>${esc(m.name || "")}</strong><span class="sk-badge watch">${esc((m.mood || "").toUpperCase())}</span></div>
+            ${(m.tracks || []).length ? `<div class="sk-options">${m.tracks.map(musicOptionHtml).join("")}</div>` : `<p class="sk-text">No free tracks found — try "${esc(m.searchQuery || "")}" on Uppbeat / Pixabay / YouTube Audio Library.</p>`}
+          </div>`).join("");
+        b.classList.add("hidden");
+      }
+    } catch {
+      b.disabled = false;
+      b.textContent = "🔊 Find downloadable tracks";
+    }
+  });
 }
