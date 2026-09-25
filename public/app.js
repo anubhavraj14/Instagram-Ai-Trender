@@ -988,9 +988,9 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "series", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer") ? "none" : "";
+  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer" || view === "series") ? "none" : "";
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
@@ -998,6 +998,7 @@ function switchView(view) {
   if (view === "saved") renderSaved();
   if (view === "generator" || view === "scriptkit" || view === "analyzer") renderHistoryLists();
   if (view !== "saved") $("#meta").textContent = "";
+  if (view === "series" && typeof window.SeriesStudio !== "undefined") window.SeriesStudio.onViewOpened();
 }
 
 /* ---------- wiring ---------- */
@@ -1930,3 +1931,12 @@ function renderOriginal(d) {
 
   saveAnlzHistory();
 }
+
+// Expose shared helpers to the Series Studio module (loaded after this file).
+window.ReelStudioShared = {
+  esc, copyText, passHeaders, switchView,
+  upsertHistory, deleteHistory,
+  buildScriptEl, scriptToText, parseScriptText,
+  mediaConfigClient,
+  errorHtml: (data) => `<p class="big">⚠️ ${esc(data.error || "Something went wrong")}</p>`,
+};

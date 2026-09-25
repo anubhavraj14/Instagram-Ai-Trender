@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body>
   <header class="topbar">
@@ -28,6 +28,7 @@
       <button class="nav-btn" data-view="scriptkit">🎒 Script Kit</button>
       <button class="nav-btn" data-view="analyzer">🔍 Reel Analyzer</button>
       <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
+      <button class="nav-btn" data-view="series">Series Studio</button>
       <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
     </nav>
     <div class="actions">
@@ -189,6 +190,73 @@
       </section>
     </div>
 
+    <!-- SERIES STUDIO VIEW -->
+    <div id="view-series" class="view hidden">
+      <h2 class="section-title">Series Studio</h2>
+      <p class="subtle" style="margin:-6px 0 18px">Plan, write, and manage connected Instagram Reel series.</p>
+      <div id="seriesLibrary" class="series-library"></div>
+      <div class="series-tabs" style="margin:18px 0 14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="chip series-tab active" data-tab="create" type="button">Create a Series</button>
+        <button class="chip series-tab" data-tab="discover" type="button">Discover Series Ideas</button>
+        <button class="chip series-tab" data-tab="research" type="button">Viral Hook Research</button>
+        <button class="chip series-tab" data-tab="analyze" type="button">Analyze a Successful Reel</button>
+      </div>
+      <div id="seriesPanelCreate" class="series-tab-panel">
+        <section class="card editor-card">
+          <label class="gen-label" for="seriesTopic">Series topic / idea</label>
+          <input id="seriesTopic" class="gen-input" type="text" maxlength="300" placeholder="e.g. How to grow on Instagram" />
+          <label class="gen-label" for="seriesContext">Additional context <span class="subtle">(optional)</span></label>
+          <textarea id="seriesContext" class="script-ta" rows="3" placeholder="Audience, angle, offers/links to mention, anything else..."></textarea>
+          <label class="gen-label" for="seriesCount">Number of episodes</label>
+          <input id="seriesCount" class="gen-input" type="number" min="3" max="10" value="6" style="max-width:120px" />
+          <div class="carousel-actions">
+            <button id="seriesCreateBtn" class="btn dl-btn" type="button">Create Series</button>
+          </div>
+          <div id="seriesCreateStatus" class="status" style="padding:14px 0 0"></div>
+        </section>
+      </div>
+      <div id="seriesPanelDiscover" class="series-tab-panel hidden">
+        <section class="card editor-card">
+          <label class="gen-label" for="seriesDiscoverTopic">Topic or niche angle <span class="subtle">(optional)</span></label>
+          <input id="seriesDiscoverTopic" class="gen-input" type="text" maxlength="300" placeholder="Leave blank to get broad creator-growth ideas" />
+          <label class="gen-label" for="seriesDiscoverCount">Number of ideas</label>
+          <input id="seriesDiscoverCount" class="gen-input" type="number" min="1" max="10" value="6" style="max-width:120px" />
+          <div class="carousel-actions">
+            <button id="seriesDiscoverBtn" class="btn dl-btn" type="button">Discover Ideas</button>
+          </div>
+          <div id="seriesDiscoverStatus" class="status" style="padding:14px 0 0"></div>
+        </section>
+      </div>
+      <div id="seriesPanelResearch" class="series-tab-panel hidden">
+        <section class="card editor-card">
+          <label class="gen-label" for="seriesResearchTopic">Topic</label>
+          <input id="seriesResearchTopic" class="gen-input" type="text" maxlength="300" placeholder="e.g. Instagram Reels hooks" />
+          <div class="carousel-actions">
+            <button id="seriesResearchBtn" class="btn dl-btn" type="button">Find Viral Hooks & Reels</button>
+          </div>
+          <div id="seriesResearchStatus" class="status" style="padding:14px 0 0"></div>
+        </section>
+      </div>
+      <div id="seriesPanelAnalyze" class="series-tab-panel hidden">
+        <section class="card editor-card">
+          <label class="gen-label" for="seriesAnalyzeUrl">Instagram Reel URL</label>
+          <input id="seriesAnalyzeUrl" class="gen-input" type="url" placeholder="https://www.instagram.com/reel/..." />
+          <div class="anlz-or">
+            <span class="subtle">or upload the Reel file if the download is blocked</span>
+            <input type="file" id="seriesAnalyzeFile" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
+            <button id="seriesAnalyzeUploadBtn" class="copy-btn" type="button">Choose video</button>
+            <span id="seriesAnalyzeFileName" class="subtle"></span>
+          </div>
+          <div class="carousel-actions">
+            <button id="seriesAnalyzeBtn" class="btn dl-btn" type="button">Analyze Reel</button>
+          </div>
+          <div id="seriesAnalyzeStatus" class="status" style="padding:14px 0 0"></div>
+        </section>
+        <div id="seriesAnalyzeOutput"></div>
+      </div>
+      <div id="seriesOutput"></div>
+    </div>
+
     <!-- SAVED VIEW -->
     <div id="view-saved" class="view hidden">
       <h2 class="section-title">⭐ Saved ideas</h2>
@@ -293,6 +361,7 @@
     </article>
   </template>
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
+  <script src="seriesStudio.js?v=3"></script>
 </body>
 </html>

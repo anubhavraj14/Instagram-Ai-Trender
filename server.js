@@ -14,7 +14,20 @@ import busboy from "busboy";
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_NICHE } from "./lib/prompt.js";
-import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, getHistoryList, setHistoryList, storageMode } from "./lib/storage.js";
+import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, getHistoryList, setHistoryList, getSeriesList, setSeriesList, storageMode } from "./lib/storage.js";
+import {
+  createSeries,
+  discoverSeriesIdeas,
+  researchTopicHooks,
+  generateNextEpisode,
+  regenerateEpisode,
+  hookVariations,
+  ctaSuggestions,
+  planBroll,
+  bgmSuggestions,
+  repurposeContent,
+  findContentGaps,
+} from "./lib/seriesStudio.js";
 import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
 import { normalizeReelUrl, downloadReel, analyzeReel, makeOriginalScript, rephrasePart } from "./lib/analyzer.js";
 import { searchBrollOptions, searchMusicOptions } from "./lib/media.js";
@@ -217,6 +230,166 @@ app.get("/api/history", requirePass, async (_req, res) => {
 app.put("/api/history", requirePass, async (req, res) => {
   try {
     await setHistoryList(req.body?.items || []);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ---------------- Series Studio ----------------
+// Full Reel series generation, discovery, smart tools, and synced library.
+
+app.post("/api/series/create", async (req, res) => {
+  const topic = String(req.body?.topic || "").trim();
+  const context = String(req.body?.context || "").trim().slice(0, 3000);
+  const episodeCount = Math.min(10, Math.max(3, Number(req.body?.episodeCount) || 6));
+  if (!topic) return res.status(400).json({ error: "Enter a series topic first.", code: "BAD_REQUEST" });
+  try {
+    const data = await createSeries({ topic, context, niche: NICHE, episodeCount });
+    res.json(data);
+  } catch (err) {
+    console.error("series/create failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SERIES_FAILED" });
+  }
+});
+
+app.post("/api/series/ideas", async (req, res) => {
+  const topic = String(req.body?.topic || "").trim().slice(0, 300);
+  const count = Math.min(10, Math.max(1, Number(req.body?.count) || 6));
+  try {
+    const data = await discoverSeriesIdeas({ topic, niche: NICHE, count });
+    res.json(data);
+  } catch (err) {
+    console.error("series/ideas failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SERIES_IDEAS_FAILED" });
+  }
+});
+
+app.post("/api/series/research", async (req, res) => {
+  const topic = String(req.body?.topic || "").trim();
+  if (!topic) return res.status(400).json({ error: "Enter a topic first.", code: "BAD_REQUEST" });
+  try {
+    const data = await researchTopicHooks({ topic, niche: NICHE });
+    res.json(data);
+  } catch (err) {
+    console.error("series/research failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SERIES_RESEARCH_FAILED" });
+  }
+});
+
+app.post("/api/series/next-episode", async (req, res) => {
+  const series = req.body?.series;
+  if (!series || !series.seriesName) return res.status(400).json({ error: "Missing series.", code: "BAD_REQUEST" });
+  try {
+    const ep = await generateNextEpisode({ series, niche: NICHE });
+    res.json({ episode: ep });
+  } catch (err) {
+    console.error("series/next-episode failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "NEXT_EPISODE_FAILED" });
+  }
+});
+
+app.post("/api/series/regenerate-episode", async (req, res) => {
+  const series = req.body?.series;
+  const index = Number(req.body?.episodeIndex);
+  if (!series || !series.seriesName || Number.isNaN(index)) return res.status(400).json({ error: "Missing series or episode index.", code: "BAD_REQUEST" });
+  try {
+    const ep = await regenerateEpisode({ series, episodeIndex: index, niche: NICHE });
+    res.json({ episode: ep, index });
+  } catch (err) {
+    console.error("series/regenerate-episode failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "REGENERATE_FAILED" });
+  }
+});
+
+app.post("/api/series/hook-variations", async (req, res) => {
+  const episode = req.body?.episode;
+  if (!episode || !episode.title) return res.status(400).json({ error: "Missing episode.", code: "BAD_REQUEST" });
+  try {
+    const out = await hookVariations({ episode, niche: NICHE });
+    res.json(out);
+  } catch (err) {
+    console.error("series/hook-variations failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "HOOK_VARIATIONS_FAILED" });
+  }
+});
+
+app.post("/api/series/cta-suggestions", async (req, res) => {
+  const episode = req.body?.episode;
+  const goal = String(req.body?.goal || "follows").trim();
+  if (!episode || !episode.title) return res.status(400).json({ error: "Missing episode.", code: "BAD_REQUEST" });
+  try {
+    const out = await ctaSuggestions({ episode, goal, niche: NICHE });
+    res.json(out);
+  } catch (err) {
+    console.error("series/cta-suggestions failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "CTA_FAILED" });
+  }
+});
+
+app.post("/api/series/broll", async (req, res) => {
+  const lines = req.body?.lines;
+  const hook = String(req.body?.hook || "").trim();
+  const onScreenHook = String(req.body?.onScreenHook || "").trim();
+  if (!Array.isArray(lines) || !lines.length) return res.status(400).json({ error: "Missing script lines.", code: "BAD_REQUEST" });
+  try {
+    const out = await planBroll({ scriptLines: lines, hook, onScreenHook, niche: NICHE });
+    res.json(out);
+  } catch (err) {
+    console.error("series/broll failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "BROLL_FAILED" });
+  }
+});
+
+app.post("/api/series/bgm", async (req, res) => {
+  const episode = req.body?.episode;
+  if (!episode || !episode.title) return res.status(400).json({ error: "Missing episode.", code: "BAD_REQUEST" });
+  try {
+    const out = await bgmSuggestions({ episode, niche: NICHE });
+    res.json(out);
+  } catch (err) {
+    console.error("series/bgm failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "BGM_FAILED" });
+  }
+});
+
+app.post("/api/series/repurpose", async (req, res) => {
+  const source = req.body?.source;
+  const format = String(req.body?.format || "caption").trim().toLowerCase();
+  if (!source || (!source.script && !source.text)) return res.status(400).json({ error: "Missing source content.", code: "BAD_REQUEST" });
+  if (!["carousel", "story", "caption", "normal post"].includes(format)) return res.status(400).json({ error: "Unsupported format.", code: "BAD_REQUEST" });
+  try {
+    const out = await repurposeContent({ source, format, niche: NICHE });
+    res.json({ result: out, format });
+  } catch (err) {
+    console.error("series/repurpose failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "REPURPOSE_FAILED" });
+  }
+});
+
+app.post("/api/series/gaps", async (req, res) => {
+  const series = req.body?.series;
+  if (!series || !series.seriesName) return res.status(400).json({ error: "Missing series.", code: "BAD_REQUEST" });
+  try {
+    const out = await findContentGaps({ series, niche: NICHE });
+    res.json(out);
+  } catch (err) {
+    console.error("series/gaps failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "GAPS_FAILED" });
+  }
+});
+
+// Synced Series Studio library (same passcode gate as saved/history).
+app.get("/api/series/library", requirePass, async (_req, res) => {
+  try {
+    res.json({ items: await getSeriesList() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.put("/api/series/library", requirePass, async (req, res) => {
+  try {
+    await setSeriesList(req.body?.items || []);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
