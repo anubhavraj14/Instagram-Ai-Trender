@@ -990,27 +990,129 @@ function switchView(view) {
   state.view = view;
   ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "series", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  $("#refresh").style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer" || view === "series") ? "none" : "";
+  ["#refresh", "#refreshMobile"].forEach((sel) => {
+    const btn = $(sel);
+    if (btn) btn.style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer" || view === "series") ? "none" : "";
+  });
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
   if (view === "plan" && !state.plan) loadPlan(false);
   if (view === "carousels" && !state.carousels) loadCarousels(false);
   if (view === "saved") renderSaved();
   if (view === "generator" || view === "scriptkit" || view === "analyzer") renderHistoryLists();
-  if (view !== "saved") $("#meta").textContent = "";
+  const meta = $("#meta"); if (meta && view !== "saved") meta.textContent = "";
   if (view === "series" && typeof window.SeriesStudio !== "undefined") window.SeriesStudio.onViewOpened();
+  setNavActive(view);
+}
+
+/* ---------- global nav helpers ---------- */
+const VIEW_CATEGORIES = {
+  trends: "discover", viral: "discover", plan: "discover",
+  generator: "create", scriptkit: "create", carousels: "create",
+  editor: "create", series: "create",
+  analyzer: "optimize",
+  saved: "saved"
+};
+
+function setNavActive(view) {
+  const cat = VIEW_CATEGORIES[view];
+
+  // desktop links and categories
+  document.querySelectorAll("#globalHeader [data-view]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.view === view);
+  });
+  document.querySelectorAll("#globalHeader [data-cat]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.cat === cat);
+  });
+}
+
+function closeNavMenus() {
+  document.querySelectorAll("#globalHeader .gh-cat.open").forEach((el) => el.classList.remove("open"));
+}
+
+function toggleSheet(show) {
+  const sheet = document.getElementById("ghSheet");
+  const backdrop = document.getElementById("ghBackdrop");
+  if (!sheet || !backdrop) return;
+  sheet.classList.toggle("open", show);
+  backdrop.classList.toggle("open", show);
+  document.body.classList.toggle("gh-no-scroll", show);
+}
+
+function initGlobalNav() {
+  const header = document.getElementById("globalHeader");
+  const sheet = document.getElementById("ghSheet");
+  const backdrop = document.getElementById("ghBackdrop");
+  const moreBtn = document.getElementById("ghMoreBtn");
+  if (!header || !sheet || !backdrop) return;
+
+  const DEFAULT_VIEW_FOR_CAT = { discover: "trends", create: "generator" };
+
+  // category dropdowns / mobile nav / mobile sheet
+  header.addEventListener("click", (e) => {
+    // Mobile "More" opens the All Tools bottom sheet.
+    if (e.target.closest("#ghMoreBtn")) {
+      const isOpen = sheet.classList.contains("open");
+      toggleSheet(!isOpen);
+      return;
+    }
+    // Mobile category tiles navigate to their default view.
+    const mobileCat = e.target.closest(".gh-mobile-btn[data-cat]");
+    if (mobileCat && !e.target.closest("#ghMoreBtn")) {
+      const view = DEFAULT_VIEW_FOR_CAT[mobileCat.dataset.cat] || "trends";
+      switchView(view);
+      return;
+    }
+    const catBtn = e.target.closest(".gh-cat-btn");
+    if (catBtn) {
+      const cat = catBtn.closest(".gh-cat");
+      if (cat) {
+        const isOpen = cat.classList.contains("open");
+        closeNavMenus();
+        if (!isOpen) cat.classList.add("open");
+        return;
+      }
+    }
+    const link = e.target.closest("[data-view]");
+    if (link && link.dataset.view) {
+      e.preventDefault();
+      switchView(link.dataset.view);
+      closeNavMenus();
+      toggleSheet(false);
+      return;
+    }
+  });
+
+  // Close sheet by tapping backdrop or close button.
+  backdrop.addEventListener("click", () => toggleSheet(false));
+  document.getElementById("ghSheetClose")?.addEventListener("click", () => toggleSheet(false));
+
+  // Links inside the mobile sheet are outside the header, so handle them here.
+  sheet.addEventListener("click", (e) => {
+    const link = e.target.closest("[data-view]");
+    if (link && link.dataset.view) {
+      e.preventDefault();
+      switchView(link.dataset.view);
+      toggleSheet(false);
+    }
+  });
+
+  // Close dropdowns when clicking outside the header.
+  document.addEventListener("click", (e) => {
+    if (!header.contains(e.target) && e.target !== backdrop) closeNavMenus();
+  });
 }
 
 /* ---------- wiring ---------- */
-document.querySelectorAll(".nav-btn").forEach((b) =>
-  b.addEventListener("click", () => switchView(b.dataset.view))
-);
-$("#refresh").addEventListener("click", () => {
+initGlobalNav();
+const refreshHandler = () => {
   if (state.view === "trends") loadTrends(true);
   else if (state.view === "viral") loadViral(true);
   else if (state.view === "plan") loadPlan(true);
   else if (state.view === "carousels") loadCarousels(true);
-});
+};
+$("#refresh")?.addEventListener("click", refreshHandler);
+$("#refreshMobile")?.addEventListener("click", refreshHandler);
 $("#filters").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
@@ -1029,7 +1131,13 @@ renderHistoryLists();
 fetch("/api/config")
   .then((r) => r.json())
   .then((d) => {
-    $("#niche").textContent = d.niche || "";
+    const niche = (d.niche || "").trim();
+    // Keep the header tagline short & clean; expose the full niche as a tooltip.
+    const shortTag = niche ? niche.split(/[.\n]/)[0].slice(0, 60) : "Plan · Create · Analyze · Grow";
+    const nicheEl = $("#niche");
+    if (nicheEl) { nicheEl.textContent = shortTag; if (niche) nicheEl.title = niche; }
+    const nicheMobile = $("#nicheMobile");
+    if (nicheMobile) { nicheMobile.textContent = shortTag; if (niche) nicheMobile.title = niche; }
     requiresPass = !!d.requiresPass;
     hasImages = d.images !== false;
     mediaConfigClient = { pexels: false, pixabay: false, music: false, ...(d.media || {}) };
@@ -1040,6 +1148,7 @@ fetch("/api/config")
   .catch(() => {});
 
 loadTrends(false);
+setNavActive("trends");
 
 /* ---------- Script Kit ---------- */
 const scriptkitStatus = (html) => { $("#scriptkitStatus").innerHTML = html; };

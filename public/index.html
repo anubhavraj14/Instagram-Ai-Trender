@@ -8,34 +8,157 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=24" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">◎</div>
-      <div>
-        <h1>Reel Studio</h1>
-        <p id="niche" class="niche">Loading your niche…</p>
+  <svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+    <defs>
+      <symbol id="i-ring" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="currentColor" opacity="0.2"/><circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.5"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 20 20"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-search" viewBox="0 0 20 20"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 14l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 20 20"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 16s1.5 2 3 2 3-2 3-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 23a7 7 0 0 0 7-7c0-2.2-1-4.2-3-6 .1 1.8-.8 3-2 3.2.6-3-1-6.2-4-8.4.2 3-.9 4.5-2.1 6C6.5 12.5 5 14 5 16a7 7 0 0 0 7 7z" fill="currentColor"/></symbol>
+      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M14 3c3 0 7 4 7 7-2 .5-3 2-4.5 3.5S13.5 17 13 19l-3-3c2-.5 3.5-2 5-3.5S16.5 9 17 7c-2 .5-4.5 2-6 3.5S8.5 14 8 16l-4-4c2-.5 3.5-2 5-3.5S12 4 14 3z" fill="currentColor"/><circle cx="15" cy="9" r="1.6" fill="#080a10"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="currentColor"/></symbol>
+      <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><path d="M4 16l5-5 4 4 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 5v14M17 5v14M3 9h18M3 15h18" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+      <symbol id="i-stack" viewBox="0 0 24 24"><path d="M12 2l10 5-10 5L2 7z" fill="currentColor" opacity="0.7"/><path d="M2 12l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5" y="11" width="4" height="7" rx="1" fill="currentColor" opacity="0.6"/><rect x="10" y="7" width="4" height="11" rx="1" fill="currentColor"/><rect x="15" y="14" width="4" height="4" rx="1" fill="currentColor" opacity="0.6"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L17.5 22 12 17.5 6.5 22l2-8.5L3 9h7z" fill="currentColor"/></symbol>
+      <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 1.8-4.9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 6v6h6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6l-12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="global-header" id="globalHeader">
+    <!-- Desktop header -->
+    <div class="gh-desktop">
+      <a class="gh-brand" href="#" data-view="trends" aria-label="Reel Studio home">
+        <div class="gh-logo"><svg width="22" height="22"><use href="#i-ring"/></svg></div>
+        <div class="gh-brand-text">
+          <span class="gh-brand-title">Reel <span>Studio</span> <svg class="gh-brand-spark" width="14" height="14"><use href="#i-rocket"/></svg></span>
+          <span class="gh-brand-tag" id="niche">Plan · Create · Analyze · Grow</span>
+        </div>
+      </a>
+
+      <nav class="gh-categories">
+        <div class="gh-cat" data-cat="discover">
+          <button class="gh-cat-btn" type="button"><svg class="gh-cat-icon" width="16" height="16"><use href="#i-fire"/></svg> Discover <svg class="gh-chevron" width="14" height="14"><use href="#i-chevron"/></svg></button>
+          <div class="gh-dropdown">
+            <a class="gh-link" href="#" data-view="trends"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-fire"/></svg></span><span class="gh-link-text"><strong>Trend Radar</strong><span>Latest trends</span></span></a>
+            <a class="gh-link" href="#" data-view="viral"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-rocket"/></svg></span><span class="gh-link-text"><strong>Viral Reels</strong><span>Analyze viral content</span></span></a>
+            <a class="gh-link" href="#" data-view="plan"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-calendar"/></svg></span><span class="gh-link-text"><strong>7-Day Plan</strong><span>Daily content ideas</span></span></a>
+          </div>
+        </div>
+        <div class="gh-cat" data-cat="create">
+          <button class="gh-cat-btn" type="button"><svg class="gh-cat-icon" width="16" height="16"><use href="#i-spark"/></svg> Create <svg class="gh-chevron" width="14" height="14"><use href="#i-chevron"/></svg></button>
+          <div class="gh-dropdown">
+            <a class="gh-link" href="#" data-view="generator"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-spark"/></svg></span><span class="gh-link-text"><strong>Content Generator</strong><span>Ideas & scripts</span></span></a>
+            <a class="gh-link" href="#" data-view="scriptkit"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-briefcase"/></svg></span><span class="gh-link-text"><strong>Script Kit</strong><span>Ready templates</span></span></a>
+            <a class="gh-link" href="#" data-view="carousels"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-image"/></svg></span><span class="gh-link-text"><strong>Carousels</strong><span>Design & plan</span></span></a>
+            <a class="gh-link" href="#" data-view="editor"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-film"/></svg></span><span class="gh-link-text"><strong>Reel Editor</strong><span>Edit your reels</span></span></a>
+            <a class="gh-link" href="#" data-view="series"><span class="gh-icon-wrap"><svg class="gh-icon" width="20" height="20"><use href="#i-stack"/></svg></span><span class="gh-link-text"><strong>Series Studio</strong><span>Plan & manage</span></span></a>
+          </div>
+        </div>
+        <button class="gh-cat-btn gh-cat-link" type="button" data-view="analyzer"><svg class="gh-cat-icon" width="16" height="16"><use href="#i-chart"/></svg> Optimize</button>
+        <button class="gh-cat-btn gh-cat-link" type="button" data-view="plan"><svg class="gh-cat-icon" width="16" height="16"><use href="#i-calendar"/></svg> Plan</button>
+        <button class="gh-cat-btn gh-cat-link" type="button" data-view="saved"><svg class="gh-cat-icon" width="16" height="16"><use href="#i-star"/></svg> Saved <span id="savedCount" class="badge">0</span></button>
+      </nav>
+
+      <div class="gh-actions">
+        <div class="gh-search">
+          <svg class="gh-search-icon" width="18" height="18"><use href="#i-search"/></svg>
+          <input type="text" placeholder="Search tools, ideas..." aria-label="Search" />
+          <kbd class="gh-kbd">⌘K</kbd>
+        </div>
+        <span id="meta" class="gh-meta"></span>
+        <button id="refresh" class="gh-refresh" type="button" aria-label="Refresh" title="Refresh">
+          <svg width="18" height="18"><use href="#i-refresh"/></svg>
+        </button>
+        <button class="gh-notify" type="button" aria-label="Notifications">
+          <svg width="20" height="20"><use href="#i-bell"/></svg>
+          <span class="gh-dot"></span>
+        </button>
+        <button class="gh-profile" type="button" aria-label="Profile">
+          <span class="gh-avatar">RS</span>
+          <svg class="gh-chevron" width="14" height="14"><use href="#i-chevron"/></svg>
+        </button>
       </div>
     </div>
-    <nav class="nav">
-      <button class="nav-btn active" data-view="trends">🔥 Trend Radar</button>
-      <button class="nav-btn" data-view="viral">🚀 Viral Reels</button>
-      <button class="nav-btn" data-view="plan">🗓️ 7-Day Plan</button>
-      <button class="nav-btn" data-view="carousels">🖼️ Carousels</button>
-      <button class="nav-btn" data-view="generator">✨ Content Generator</button>
-      <button class="nav-btn" data-view="scriptkit">🎒 Script Kit</button>
-      <button class="nav-btn" data-view="analyzer">🔍 Reel Analyzer</button>
-      <button class="nav-btn" data-view="editor">🎬 Reel Editor</button>
-      <button class="nav-btn" data-view="series">Series Studio</button>
-      <button class="nav-btn" data-view="saved">⭐ Saved <span id="savedCount" class="badge">0</span></button>
-    </nav>
-    <div class="actions">
-      <span id="meta" class="meta"></span>
-      <button id="refresh" class="btn">↻ Refresh</button>
+
+    <!-- Mobile header -->
+    <div class="gh-mobile">
+      <div class="gh-mobile-top">
+        <a class="gh-brand" href="#" data-view="trends" aria-label="Reel Studio home">
+          <div class="gh-logo"><svg width="22" height="22"><use href="#i-ring"/></svg></div>
+          <div class="gh-brand-text">
+            <span class="gh-brand-title">Reel Studio</span>
+            <span class="gh-brand-tag" id="nicheMobile">Plan · Create · Analyze · Grow</span>
+          </div>
+        </a>
+        <div class="gh-actions">
+          <button id="refreshMobile" class="gh-refresh" type="button" aria-label="Refresh" title="Refresh">
+            <svg width="18" height="18"><use href="#i-refresh"/></svg>
+          </button>
+          <button class="gh-search-icon-btn" type="button" aria-label="Search">
+            <svg width="20" height="20"><use href="#i-search"/></svg>
+          </button>
+          <button class="gh-notify" type="button" aria-label="Notifications">
+            <svg width="20" height="20"><use href="#i-bell"/></svg>
+            <span class="gh-dot"></span>
+          </button>
+          <button class="gh-profile" type="button" aria-label="Profile">
+            <span class="gh-avatar">RS</span>
+          </button>
+        </div>
+      </div>
+      <nav class="gh-mobile-nav">
+        <button class="gh-mobile-btn active" type="button" data-cat="discover"><svg class="gh-micon" width="22" height="22"><use href="#i-fire"/></svg><span>Discover</span></button>
+        <button class="gh-mobile-btn" type="button" data-cat="create"><svg class="gh-micon" width="22" height="22"><use href="#i-spark"/></svg><span>Create</span></button>
+        <button class="gh-mobile-btn" type="button" data-view="analyzer"><svg class="gh-micon" width="22" height="22"><use href="#i-chart"/></svg><span>Optimize</span></button>
+        <button class="gh-mobile-btn" type="button" data-view="plan"><svg class="gh-micon" width="22" height="22"><use href="#i-calendar"/></svg><span>Plan</span></button>
+        <button class="gh-mobile-btn" type="button" data-view="saved"><svg class="gh-micon" width="22" height="22"><use href="#i-star"/></svg><span>Saved</span></button>
+        <button class="gh-mobile-btn" type="button" id="ghMoreBtn"><svg class="gh-micon" width="22" height="22"><use href="#i-dots"/></svg><span>More</span></button>
+      </nav>
     </div>
   </header>
+
+  <!-- Mobile bottom sheet (outside header so it is viewport-fixed, not inside the sticky header) -->
+  <div class="gh-sheet-backdrop" id="ghBackdrop"></div>
+  <div class="gh-sheet" id="ghSheet" role="dialog" aria-modal="true" aria-labelledby="ghSheetTitle">
+    <div class="gh-sheet-header">
+      <h3 id="ghSheetTitle">All Tools</h3>
+      <button class="gh-sheet-close" id="ghSheetClose" type="button" aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="gh-sheet-body">
+      <div class="gh-sheet-group">
+        <h4>Discover</h4>
+        <a href="#" data-view="trends"><svg width="18" height="18"><use href="#i-fire"/></svg>Trend Radar</a>
+        <a href="#" data-view="viral"><svg width="18" height="18"><use href="#i-rocket"/></svg>Viral Reels</a>
+        <a href="#" data-view="plan"><svg width="18" height="18"><use href="#i-calendar"/></svg>7-Day Plan</a>
+      </div>
+      <div class="gh-sheet-group">
+        <h4>Create</h4>
+        <a href="#" data-view="generator"><svg width="18" height="18"><use href="#i-spark"/></svg>Content Generator</a>
+        <a href="#" data-view="scriptkit"><svg width="18" height="18"><use href="#i-briefcase"/></svg>Script Kit</a>
+        <a href="#" data-view="carousels"><svg width="18" height="18"><use href="#i-image"/></svg>Carousels</a>
+        <a href="#" data-view="editor"><svg width="18" height="18"><use href="#i-film"/></svg>Reel Editor</a>
+        <a href="#" data-view="series"><svg width="18" height="18"><use href="#i-stack"/></svg>Series Studio</a>
+      </div>
+      <div class="gh-sheet-group">
+        <h4>Optimize</h4>
+        <a href="#" data-view="analyzer"><svg width="18" height="18"><use href="#i-chart"/></svg>Reel Analyzer</a>
+      </div>
+      <div class="gh-sheet-group">
+        <h4>Other</h4>
+        <a href="#" data-view="saved"><svg width="18" height="18"><use href="#i-star"/></svg>Saved Ideas</a>
+      </div>
+    </div>
+  </div>
 
   <main class="container">
     <!-- TRENDS VIEW -->
@@ -361,7 +484,7 @@
     </article>
   </template>
 
-  <script src="app.js?v=19"></script>
-  <script src="seriesStudio.js?v=3"></script>
+  <script src="app.js?v=24"></script>
+  <script src="seriesStudio.js?v=4"></script>
 </body>
 </html>
