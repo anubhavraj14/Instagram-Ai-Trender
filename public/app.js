@@ -240,7 +240,7 @@ async function deleteHistory(id) {
   renderHistoryLists();
 }
 
-const HISTORY_KIND_LABEL = { generated: "✨ Generated", scriptkit: "🎒 Script Kit", analyzer: "🔍 Analyzed Reel" };
+const HISTORY_KIND_LABEL = { generated: "✨ Generated", scriptkit: "🎒 Script Kit", analyzer: "🔍 Analyzed Reel", series: "🎬 Series Studio" };
 
 // Compact rows: type chip + clickable title + date + delete.
 function renderHistoryList(el, kind) {
@@ -271,6 +271,7 @@ function renderHistoryLists() {
   const g = $("#genHistory"); if (g) renderHistoryList(g, "generated");
   const s = $("#skHistory"); if (s) renderHistoryList(s, "scriptkit");
   const a = $("#anlzHistory"); if (a) renderHistoryList(a, "analyzer");
+  const se = $("#seriesHistory"); if (se) renderHistoryList(se, "series");
 }
 
 // Re-open a saved item in its feature's normal output area.
@@ -286,6 +287,21 @@ function openHistoryItem(it) {
     const d = it.data || {};
     renderAnalysis(d.result || {}, false, it.id);
     if (d.original) renderOriginal(d.original);
+  } else if (it.kind === "series") {
+    switchView("series");
+    const d = it.data || {};
+    if (it.type === "series") {
+      if (typeof window.SeriesStudio?.openSeries === "function") window.SeriesStudio.openSeries(d);
+    } else if (it.type === "ideas") {
+      if (typeof window.SeriesStudio?.switchTab === "function") window.SeriesStudio.switchTab("discover");
+      if (typeof window.SeriesStudio?.renderIdeas === "function") window.SeriesStudio.renderIdeas(d.ideas || [], { topic: d.topic, fromHistory: true });
+    } else if (it.type === "research") {
+      if (typeof window.SeriesStudio?.switchTab === "function") window.SeriesStudio.switchTab("research");
+      if (typeof window.SeriesStudio?.renderResearch === "function") window.SeriesStudio.renderResearch(d, d.topic || it.title, { fromHistory: true });
+    } else if (it.type === "analyze") {
+      if (typeof window.SeriesStudio?.switchTab === "function") window.SeriesStudio.switchTab("analyze");
+      if (typeof window.SeriesStudio?.renderAnalyzeResult === "function") window.SeriesStudio.renderAnalyzeResult(d, { fromHistory: true });
+    }
   }
 }
 

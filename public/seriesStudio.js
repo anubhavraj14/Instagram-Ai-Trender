@@ -26,6 +26,10 @@ async function apiFetch(url, body) {
   return fetch(url, opts);
 }
 
+function upsertSeriesHistory(item) {
+  if (typeof window.upsertHistory === "function") window.upsertHistory(item);
+}
+
 function cacheLibrary() { try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch {} }
 function loadLibraryCache() { try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY)) || []; } catch { library = []; } }
 
@@ -568,13 +572,13 @@ async function discoverIdeas() {
     const d = await res.json();
     if (!res.ok) { $("#seriesDiscoverStatus").innerHTML = errorHtml(d); return; }
     $("#seriesDiscoverStatus").innerHTML = "";
-    renderIdeas(d.ideas || []);
+    renderIdeas(d.ideas || [], { topic });
   } catch {
     $("#seriesDiscoverStatus").innerHTML = errorHtml({ error: "Could not reach the server." });
   }
 }
 
-function renderIdeas(ideas) {
+function renderIdeas(ideas, { topic = "", fromHistory = false } = {}) {
   const out = $("#seriesOutput");
   out.innerHTML = `<h3 class="section-title" style="margin-top:18px">Discovered Series Ideas</h3>`;
   ideas.forEach((idea, i) => {
@@ -605,6 +609,15 @@ function renderIdeas(ideas) {
     });
     out.appendChild(card);
   });
+  if (!fromHistory) {
+    upsertSeriesHistory({
+      id: `series-ideas-${Date.now()}`,
+      kind: "series",
+      type: "ideas",
+      title: topic ? `Discovered ideas: ${topic}` : "Discovered Series Ideas",
+      data: { ideas, topic },
+    });
+  }
 }
 
 async function researchHooks() {
@@ -623,7 +636,7 @@ async function researchHooks() {
   }
 }
 
-function renderResearch(d, topic) {
+function renderResearch(d, topic, { fromHistory = false } = {}) {
   const out = $("#seriesOutput");
   out.innerHTML = "";
 
@@ -710,6 +723,15 @@ function renderResearch(d, topic) {
     });
     out.appendChild(sec);
   }
+  if (!fromHistory) {
+    upsertSeriesHistory({
+      id: `series-research-${Date.now()}`,
+      kind: "series",
+      type: "research",
+      title: topic,
+      data: { ...d, topic },
+    });
+  }
 }
 
 async function analyzeReel() {
@@ -748,12 +770,7 @@ function pollAnalyze(id) {
   }, 2000);
 }
 
-function renderAnalyzeResult(r) {
-  // Reuse the existing Reel Analyzer renderer if available.
-  if (typeof window.renderAnalysis === "function") {
-    window.renderAnalysis(r, false, `series-anlz-${Date.now()}`);
-    return;
-  }
+function renderAnalyzeResult(r, { fromHistory = false } = {}) {
   const out = $("#seriesAnalyzeOutput");
   out.innerHTML = `<div class="card"><h3 class="card-title">${esc(r.title || "Analyzed Reel")}</h3>
     <p class="subtle">${esc(r.coreIdea || "")}</p>
@@ -761,6 +778,15 @@ function renderAnalyzeResult(r) {
     <p class="sk-text">CTA: ${esc(r.cta?.text || "")}</p>
     <pre class="script-custom">${esc((r.segments || []).map((s) => s.text).join("\n"))}</pre>
   </div>`;
+  if (!fromHistory) {
+    upsertSeriesHistory({
+      id: `series-analyze-${Date.now()}`,
+      kind: "series",
+      type: "analyze",
+      title: r.title || "Analyzed Reel",
+      data: r,
+    });
+  }
 }
 
 function switchTab(tab) {
@@ -806,7 +832,15 @@ function init() {
   });
 }
 
-window.SeriesStudio = { onViewOpened: refreshLibrary, init };
+window.SeriesStudio = {
+  onViewOpened: refreshLibrary,
+  init,
+  switchTab,
+  openSeries,
+  renderIdeas,
+  renderResearch,
+  renderAnalyzeResult,
+};
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 else init();
