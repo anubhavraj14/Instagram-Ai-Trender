@@ -30,7 +30,7 @@ import {
 } from "./lib/seriesStudio.js";
 import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
 import { normalizeReelUrl, downloadReel, analyzeReel, makeOriginalScript, rephrasePart } from "./lib/analyzer.js";
-import { searchBrollOptions, searchMusicOptions } from "./lib/media.js";
+import { searchBrollOptions, searchMusicOptions, searchOverlayOptions } from "./lib/media.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -703,6 +703,24 @@ app.post("/api/analyze/broll", async (req, res) => {
     res.json({ options, cached: false });
   } catch (err) {
     res.status(500).json({ error: err.message, code: "BROLL_FAILED" });
+  }
+});
+
+// Lazy overlay resolution — a query + kind -> transparent sticker/icon/badge/arrow
+// options (keyless, free). Used by the Analyzer and Series Studio per-line tools.
+app.post("/api/overlays", async (req, res) => {
+  const query = String(req.body?.query || "").trim().slice(0, 80);
+  const kind = String(req.body?.kind || "sticker").trim().slice(0, 20);
+  if (!query) return res.status(400).json({ error: "Missing query", code: "BAD_QUERY" });
+  const key = "overlay:" + createHash("sha1").update(`${query}|${kind}`).digest("hex");
+  try {
+    const cached = await getCache(key).catch(() => null);
+    if (cached?.options) return res.json({ ...cached, cached: true });
+    const options = await searchOverlayOptions(query, { kind, limit: 6 });
+    await setCache(key, { options, cachedAt: Date.now() }).catch(() => {});
+    res.json({ options, cached: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: "OVERLAY_FAILED" });
   }
 });
 

@@ -381,26 +381,71 @@ async function runBrollPlanner(card, idx, out) {
     const d = await res.json();
     if (!res.ok) { out.innerHTML = errorHtml(d); return; }
     ep.script.lines = (d.lines || []).map((l) => ({ ...l, originalSay: l.say }));
-    let html = `<div class="sk-section"><h3 class="sk-section-title">B-roll Plan</h3>`;
+    const su = d.scriptUnderstanding || null;
+    let html = `<div class="sk-section"><h3 class="sk-section-title">B-roll & Overlay Plan</h3>`;
+    if (su) {
+      html += `<div class="sk-understanding">
+        <h3 class="sk-section-title">What the AI understood</h3>
+        ${su.coreMessage ? `<p class="sk-text"><strong>Core message:</strong> ${esc(su.coreMessage)}</p>` : ""}
+        ${su.setting ? `<p class="sk-text"><strong>Setting:</strong> ${esc(su.setting)}</p>` : ""}
+        ${su.tone ? `<p class="sk-text"><strong>Tone:</strong> ${esc(su.tone)}</p>` : ""}
+        ${Array.isArray(su.keyEntities) && su.keyEntities.length ? `<p class="sk-meta">Key visuals: ${su.keyEntities.map((e) => `<span class="sk-chip">${esc(e)}</span>`).join(" ")}</p>` : ""}
+      </div>`;
+    }
     (d.lines || []).forEach((l, i) => {
+      const overlays = Array.isArray(l.overlays) ? l.overlays.filter((o) => o && o.query) : [];
       html += `<div class="sk-beat">
         <p class="sk-beat-say">${esc(l.say || "")}</p>
         <p class="sk-text">Visual: ${esc(l.visual || "")}</p>
         <p class="sk-text">B-roll query: <code>${esc(l.brollQuery || "")}</code> · ${esc(l.placement || "")}</p>
-        ${l.brollQuery ? `<button class="copy-btn ss-find-broll" data-q="${esc(l.brollQuery || "")}" data-i="${i}" type="button">Find stock media</button><div class="ss-broll-opts" id="ss-broll-${idx}-${i}"></div>` : ""}
+        ${l.brollQuery ? `<button class="copy-btn ss-find-broll" data-q="${esc(l.brollQuery || "")}" data-alt="${esc(l.brollAltQuery || "")}" data-i="${i}" type="button">Find stock media</button><div class="ss-broll-opts" id="ss-broll-${idx}-${i}"></div>` : ""}
+        ${overlays.length ? `<div class="sk-overlays"><span class="k">🎨 Graphic overlays</span>${overlays.map((o, oi) => `
+          <div class="sk-ovl">
+            <div class="sk-ovl-head">
+              <span class="sk-badge ovl">${esc((o.kind || "sticker").toUpperCase())}</span>
+              <button class="copy-btn ss-find-ovl" data-q="${esc(o.query)}" data-kind="${esc(o.kind || "sticker")}" data-i="${i}" data-oi="${oi}" type="button">✨ Find: "${esc(o.query)}${o.label ? " · " + esc(o.label) : ""}"</button>
+            </div>
+            ${o.why ? `<p class="sk-text">${esc(o.why)}</p>` : ""}
+            <div class="ss-ovl-opts" id="ss-ovl-${idx}-${i}-${oi}"></div>
+          </div>`).join("")}</div>` : ""}
       </div>`;
     });
     html += `</div>`;
     out.innerHTML = html;
-    out.querySelectorAll(".ss-find-broll").forEach((b) => b.addEventListener("click", async () => {
-      const q = b.dataset.q;
-      const optsEl = out.querySelector(`#ss-broll-${idx}-${b.dataset.i}`);
+
+    out.querySelectorAll(".ss-find-ovl").forEach((b) => b.addEventListener("click", async () => {
+      const optsEl = out.querySelector(`#ss-ovl-${idx}-${b.dataset.i}-${b.dataset.oi}`);
+      const prev = b.textContent;
       b.disabled = true; b.textContent = "Searching...";
       try {
-        const r = await apiFetch("/api/analyze/broll", { query: q });
+        const r = await apiFetch("/api/overlays", { query: b.dataset.q, kind: b.dataset.kind });
         const data = await r.json();
         if (r.ok && (data.options || []).length) {
-          optsEl.innerHTML = `<div class="sk-options">${data.options.map((opt) => `
+          optsEl.innerHTML = `<div class="sk-ovl-grid">${data.options.map((opt) => `
+            <div class="sk-ovl-option">
+              <div class="sk-ovl-canvas"><img src="${esc(opt.thumb || opt.url)}" alt="${esc(opt.label || "")}" loading="lazy" /></div>
+              <span class="sk-ovl-name">${esc(opt.label || opt.name || "")}</span>
+              <div class="sk-ovl-dl"><a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener" download>⬇ PNG</a>${opt.svgUrl ? `<a class="copy-btn" href="${esc(opt.svgUrl)}" target="_blank" rel="noopener">SVG</a>` : ""}</div>
+            </div>`).join("")}</div>`;
+          b.classList.add("hidden");
+        } else { optsEl.innerHTML = `<p class="sk-text">No graphic found.</p>`; b.disabled = false; b.textContent = prev; }
+      } catch { b.disabled = false; b.textContent = prev; }
+    }));
+    out.querySelectorAll(".ss-find-broll").forEach((b) => b.addEventListener("click", async () => {
+      const q = b.dataset.q;
+      const alt = b.dataset.alt;
+      const optsEl = out.querySelector(`#ss-broll-${idx}-${b.dataset.i}`);
+      b.disabled = true; b.textContent = "Searching...";
+      const tryBroll = async (query) => {
+        const r = await apiFetch("/api/analyze/broll", { query });
+        const data = await r.json();
+        return r.ok ? (data.options || []) : [];
+      };
+      try {
+        let options = await tryBroll(q);
+        if (!options.length && alt && alt !== q) options = await tryBroll(alt);
+        if (options.length) {
+          optsEl.innerHTML = `<div class="sk-options">${options.map((opt) => `
             <div class="sk-option">
               ${opt.type === "video" ? `<video class="sk-preview" src="${esc(opt.url)}" poster="${esc(opt.thumb || "")}" preload="metadata" controls playsinline></video>` : `<img class="sk-preview" src="${esc(opt.thumb || opt.url)}" alt="" loading="lazy" />`}
               <div class="sk-option-info"><span class="sk-option-tag">${esc(opt.source || "")}</span>${opt.credit ? `<span class="sk-option-credit">by ${esc(opt.credit)}</span>` : ""}</div>

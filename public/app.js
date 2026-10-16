@@ -1210,6 +1210,35 @@ function brollOptionHtml(opt, idx) {
   `;
 }
 
+// Shared HTML for a single transparent graphic-overlay option (sticker/icon/badge/arrow).
+function overlayOptionHtml(opt) {
+  return `
+    <div class="sk-ovl-option">
+      <div class="sk-ovl-canvas"><img src="${esc(opt.thumb || opt.url)}" alt="${esc(opt.label || "")}" loading="lazy" /></div>
+      <span class="sk-ovl-name">${esc(opt.label || opt.name || "")}</span>
+      <div class="sk-ovl-dl">
+        <a class="btn sk-option-dl" href="${esc(opt.url)}" target="_blank" rel="noopener" download>⬇ PNG</a>
+        ${opt.svgUrl ? `<a class="copy-btn" href="${esc(opt.svgUrl)}" target="_blank" rel="noopener">SVG</a>` : ""}
+      </div>
+    </div>`;
+}
+
+// A per-beat/per-line block of suggested overlays with (optional) resolved options.
+function overlaySuggestionHtml(ov) {
+  const options = Array.isArray(ov.options) ? ov.options : [];
+  const kindLabel = (ov.kind || "sticker").toUpperCase();
+  const label = ov.label ? ` · “${esc(ov.label)}”` : "";
+  return `
+    <div class="sk-ovl">
+      <div class="sk-ovl-head">
+        <span class="sk-badge ovl">${esc(kindLabel)}</span>
+        <span class="sk-ovl-query">✨ ${esc(ov.query || "")}${label}</span>
+      </div>
+      ${ov.why ? `<p class="sk-text">${esc(ov.why)}</p>` : ""}
+      ${options.length ? `<div class="sk-ovl-grid">${options.map(overlayOptionHtml).join("")}</div>` : ""}
+    </div>`;
+}
+
 // Shared HTML for a downloadable music-track option.
 function musicOptionHtml(opt, idx) {
   return `
@@ -1251,6 +1280,7 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
     const br = b.broll || {};
     const options = Array.isArray(br.options) ? br.options : (br.mediaUrl ? [{ url: br.mediaUrl, thumb: "", type: br.media, source: br.source, credit: br.credit, duration: br.duration }] : []);
     const hasOptions = options.length > 0;
+    const overlays = Array.isArray(b.overlays) ? b.overlays.filter((o) => o && o.query) : [];
     const fallbackLinks = br.query && !hasOptions ? `
       <div class="sk-fallback-links">
         <a class="copy-btn" href="https://www.pexels.com/search/${encodeURIComponent(br.query)}/?orientation=portrait" target="_blank" rel="noopener">Search Pexels</a>
@@ -1278,6 +1308,7 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
           ${fallbackLinks}
         </div>
       ` : ""}
+      ${overlays.length ? `<div class="sk-overlays"><span class="k">🎨 Graphic overlays</span>${overlays.map(overlaySuggestionHtml).join("")}</div>` : ""}
       ${b.soundEffect ? `<p class="sk-sfx">🔊 ${esc(b.soundEffect)}</p>` : ""}
     </div>`;
   }).join("");
@@ -1304,6 +1335,17 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
   const assets = (kit.requiredAssets || []).map((a) => `<div class="sk-asset"><span class="sk-asset-type">${esc(a.type || "")}</span><span>${esc(a.description || "")}</span></div>`).join("");
   const cap = kit.captions || {};
 
+  const su = kit.scriptUnderstanding || null;
+  const understandingHtml = su ? `
+    <div class="sk-understanding">
+      <h3 class="sk-section-title">🧠 What the AI understood</h3>
+      ${su.coreMessage ? `<p class="sk-text"><strong>Core message:</strong> ${esc(su.coreMessage)}</p>` : ""}
+      ${su.narrativeArc ? `<p class="sk-text"><strong>Arc:</strong> ${esc(su.narrativeArc)}</p>` : ""}
+      ${su.setting ? `<p class="sk-text"><strong>Setting:</strong> ${esc(su.setting)}</p>` : ""}
+      ${su.tone ? `<p class="sk-text"><strong>Tone:</strong> ${esc(su.tone)}</p>` : ""}
+      ${Array.isArray(su.keyEntities) && su.keyEntities.length ? `<p class="sk-meta">Key visuals: ${su.keyEntities.map((e) => `<span class="sk-chip">${esc(e)}</span>`).join(" ")}</p>` : ""}
+    </div>` : "";
+
   out.innerHTML = `
     ${imgNotice}
     <div class="sk-header">
@@ -1311,6 +1353,7 @@ function renderScriptKit(kit, out = $("#scriptkitOutput")) {
       <span class="sk-badge watch">~${kit.estimatedDurationSeconds || "~"}s · ${esc(kit.niche || "")}</span>
     </div>
     <p class="sk-psychology"><strong>Audience trigger:</strong> ${esc(kit.audiencePsychology || "")}</p>
+    ${understandingHtml}
     ${hookHtml}
     <div class="sk-section">
       <h3 class="sk-section-title">🎬 Beat-by-beat plan</h3>
@@ -1963,6 +2006,18 @@ function renderOriginal(d) {
         <div class="anlz-broll">
           <button class="copy-btn anlz-find-broll" type="button">🎞️ Find B-roll: "${esc(ln.brollQuery)}"</button>
           <div class="anlz-broll-opts"></div>
+        </div>` : ""}
+      ${(Array.isArray(ln.overlays) ? ln.overlays.filter((o) => o && o.query) : []).length ? `
+        <div class="anlz-overlays">
+          ${ln.overlays.filter((o) => o && o.query).map((o, oi) => `
+            <div class="sk-ovl">
+              <div class="sk-ovl-head">
+                <span class="sk-badge ovl">${esc((o.kind || "sticker").toUpperCase())}</span>
+                <button class="copy-btn anlz-find-ovl" data-q="${esc(o.query)}" data-kind="${esc(o.kind || "sticker")}" data-oi="${oi}" type="button">✨ Find: "${esc(o.query)}${o.label ? " · " + esc(o.label) : ""}"</button>
+              </div>
+              ${o.why ? `<p class="sk-text">${esc(o.why)}</p>` : ""}
+              <div class="anlz-ovl-opts" data-oi="${oi}"></div>
+            </div>`).join("")}
         </div>` : ""}`;
     linesEl.appendChild(row);
 
@@ -1995,15 +2050,21 @@ function renderOriginal(d) {
         brollBtn.disabled = true;
         brollBtn.textContent = "Searching…";
         const optsEl = row.querySelector(".anlz-broll-opts");
-        try {
+        // Try the specific query first, then the AI's on-topic altQuery.
+        const tryBroll = async (q) => {
           const res = await fetch("/api/analyze/broll", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: ln.brollQuery }),
+            body: JSON.stringify({ query: q }),
           });
           const r = await res.json();
-          if (res.ok && (r.options || []).length) {
-            optsEl.innerHTML = `<div class="sk-options">${r.options.map(brollOptionHtml).join("")}</div>`;
+          return res.ok ? (r.options || []) : [];
+        };
+        try {
+          let opts = await tryBroll(ln.brollQuery);
+          if (!opts.length && ln.brollAltQuery && ln.brollAltQuery !== ln.brollQuery) opts = await tryBroll(ln.brollAltQuery);
+          if (opts.length) {
+            optsEl.innerHTML = `<div class="sk-options">${opts.map(brollOptionHtml).join("")}</div>`;
             brollBtn.classList.add("hidden");
           } else {
             optsEl.innerHTML = `<p class="sk-text">No stock media found — <a href="https://www.pexels.com/search/videos/${encodeURIComponent(ln.brollQuery)}/?orientation=portrait" target="_blank" rel="noopener">search Pexels manually</a></p>`;
@@ -2016,6 +2077,34 @@ function renderOriginal(d) {
         }
       });
     }
+
+    row.querySelectorAll(".anlz-find-ovl").forEach((ob) => {
+      ob.addEventListener("click", async () => {
+        ob.disabled = true;
+        const prev = ob.textContent;
+        ob.textContent = "Searching…";
+        const optsEl = row.querySelector(`.anlz-ovl-opts[data-oi="${ob.dataset.oi}"]`);
+        try {
+          const res = await fetch("/api/overlays", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: ob.dataset.q, kind: ob.dataset.kind }),
+          });
+          const r = await res.json();
+          if (res.ok && (r.options || []).length) {
+            optsEl.innerHTML = `<div class="sk-ovl-grid">${r.options.map(overlayOptionHtml).join("")}</div>`;
+            ob.classList.add("hidden");
+          } else {
+            optsEl.innerHTML = `<p class="sk-text">No graphic found.</p>`;
+            ob.disabled = false;
+            ob.textContent = prev;
+          }
+        } catch {
+          ob.disabled = false;
+          ob.textContent = prev;
+        }
+      });
+    });
   });
 
   // BGM suggestions + lazy track resolution.
