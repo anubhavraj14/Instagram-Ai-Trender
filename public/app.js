@@ -1651,6 +1651,13 @@ function buildGeneratedCards(result) {
         ${f.visual ? `<p><span class="k">Visual</span>${esc(f.visual)}</p>` : ""}
         ${f.interactive && f.interactive !== "none" ? `<p><span class="k">Interactive</span>${esc(f.interactive)}</p>` : ""}
         ${f.timing ? `<p><span class="k">Timing</span>${esc(f.timing)}</p>` : ""}`;
+      const fOverlays = Array.isArray(f.overlays) ? f.overlays.filter((o) => o && o.query && (o.options || []).length) : [];
+      if (fOverlays.length) {
+        const ob = document.createElement("div");
+        ob.className = "sk-overlays";
+        ob.innerHTML = `<span class="k">🎨 Graphic overlays</span>${fOverlays.map(overlaySuggestionHtml).join("")}`;
+        el.appendChild(ob);
+      }
       frames.appendChild(el);
       // Resolve a real photo for the frame via the existing free slide-image pipeline.
       if (f.imageQuery) {
@@ -1702,6 +1709,14 @@ function buildGeneratedCards(result) {
   } else if (p.imageQuery) {
     imgWrap.innerHTML = `<p class="subtle">🔍 Find a photo: <a href="https://www.pexels.com/search/${encodeURIComponent(p.imageQuery)}/?orientation=portrait" target="_blank" rel="noopener">search "${esc(p.imageQuery)}" on Pexels</a></p>`;
   } else imgWrap.remove();
+  const postOverlays = Array.isArray(p.overlays) ? p.overlays.filter((o) => o && o.query && (o.options || []).length) : [];
+  if (postOverlays.length) {
+    const ob = document.createElement("div");
+    ob.className = "sk-overlays";
+    ob.style.marginTop = "12px";
+    ob.innerHTML = `<span class="k">🎨 Graphic overlays</span>${postOverlays.map(overlaySuggestionHtml).join("")}`;
+    card.querySelector(".script-caption").before(ob); // caption block always present
+  }
   card.querySelector(".cap-btn").addEventListener(
     "click",
     (e) => copyText(e, `${p.caption || ""}\n\n${(p.hashtags || []).join(" ")}`.trim())
