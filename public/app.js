@@ -1004,11 +1004,11 @@ async function loadCarousels(force = false) {
 /* ---------- router ---------- */
 function switchView(view) {
   state.view = view;
-  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "series", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
+  ["trends", "viral", "plan", "carousels", "generator", "scriptkit", "analyzer", "editor", "typography", "series", "saved"].forEach((v) => $(`#view-${v}`).classList.toggle("hidden", v !== view));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   ["#refresh", "#refreshMobile"].forEach((sel) => {
     const btn = $(sel);
-    if (btn) btn.style.display = (view === "saved" || view === "editor" || view === "scriptkit" || view === "generator" || view === "analyzer" || view === "series") ? "none" : "";
+    if (btn) btn.style.display = (view === "saved" || view === "editor" || view === "typography" || view === "scriptkit" || view === "generator" || view === "analyzer" || view === "series") ? "none" : "";
   });
   if (view === "trends" && !state.trends) loadTrends(false);
   if (view === "viral" && !state.viral) loadViral(false);
@@ -1018,6 +1018,7 @@ function switchView(view) {
   if (view === "generator" || view === "scriptkit" || view === "analyzer") renderHistoryLists();
   const meta = $("#meta"); if (meta && view !== "saved") meta.textContent = "";
   if (view === "series" && typeof window.SeriesStudio !== "undefined") window.SeriesStudio.onViewOpened();
+  if (view === "typography" && typeof window.TypographyReel !== "undefined") window.TypographyReel.onViewOpened();
   setNavActive(view);
 }
 
@@ -1025,7 +1026,7 @@ function switchView(view) {
 const VIEW_CATEGORIES = {
   trends: "discover", viral: "discover", plan: "discover",
   generator: "create", scriptkit: "create", carousels: "create",
-  editor: "create", series: "create",
+  editor: "create", typography: "create", series: "create",
   analyzer: "optimize",
   saved: "saved"
 };

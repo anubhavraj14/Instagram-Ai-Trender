@@ -29,6 +29,7 @@ import {
   findContentGaps,
 } from "./lib/seriesStudio.js";
 import { getWorkflow, CONTENT_TYPES } from "./lib/workflows/index.js";
+import { generateTypographyReel, regenerateTypographyScene } from "./lib/workflows/typography.js";
 import { normalizeReelUrl, downloadReel, analyzeReel, makeOriginalScript, rephrasePart } from "./lib/analyzer.js";
 import { searchBrollOptions, searchMusicOptions, searchOverlayOptions } from "./lib/media.js";
 
@@ -116,6 +117,38 @@ app.post("/api/script-kit", async (req, res) => {
   } catch (err) {
     console.error("script-kit failed:", err.message);
     res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SCRIPT_KIT_FAILED" });
+  }
+});
+
+// ---------- Faceless Typography Reel ----------
+// Topic or full script -> kinetic-typography scene plan, with real background
+// photos/textures, transparent overlays, and BGM resolved from free sources.
+app.post("/api/typography/generate", async (req, res) => {
+  const input = String(req.body?.input || "").trim();
+  const isScript = !!req.body?.isScript;
+  if (!input) return res.status(400).json({ error: "Enter a topic or paste a script first.", code: "BAD_REQUEST" });
+  if (input.length > 8000) return res.status(400).json({ error: "Input too long (max 8000 chars).", code: "BAD_REQUEST" });
+  try {
+    const plan = await generateTypographyReel({ input, isScript, niche: NICHE });
+    res.json(plan);
+  } catch (err) {
+    console.error("typography/generate failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "TYPOGRAPHY_FAILED" });
+  }
+});
+
+// Regenerate a single typography scene (keeps the rest of the Reel intact).
+app.post("/api/typography/scene", async (req, res) => {
+  const plan = req.body?.plan;
+  const scene = req.body?.scene;
+  const instruction = String(req.body?.instruction || "").slice(0, 400);
+  if (!plan || !scene) return res.status(400).json({ error: "Missing plan or scene.", code: "BAD_REQUEST" });
+  try {
+    const next = await regenerateTypographyScene({ plan, scene, instruction, niche: NICHE });
+    res.json({ scene: next });
+  } catch (err) {
+    console.error("typography/scene failed:", err.message);
+    res.status(err.code === "NO_API_KEY" ? 400 : 500).json({ error: err.message, code: err.code || "SCENE_FAILED" });
   }
 });
 
@@ -577,6 +610,34 @@ app.get("/api/reel-media", async (req, res) => {
     const { Readable } = await import("node:stream");
     Readable.fromWeb(r.body).pipe(res);
   } catch (e) {
+    res.status(502).end();
+  }
+});
+
+// CORS-clean proxy for the Typography Reel renderer. Background images and BGM
+// audio must be same-origin/CORS-clean so the browser can draw them to a canvas
+// (export) and decode them with Web Audio. Only known FREE asset hosts allowed.
+const PROXY_HOSTS = [
+  "images.pexels.com", "videos.pexels.com", "player.pexels.com",
+  "pixabay.com", "cdn.pixabay.com",
+  "api.freetouse.com", "cdn.freetouse.com", "files.freetouse.com", "freetouse.com",
+  "api.iconify.design", "wsrv.nl",
+];
+app.get("/api/asset-proxy", async (req, res) => {
+  let host;
+  const url = String(req.query.url || "");
+  try { host = new URL(url).host; } catch { return res.status(400).json({ error: "Bad url" }); }
+  const ok = url.startsWith("https://") && PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
+  if (!ok) return res.status(400).json({ error: "Host not allowed" });
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return res.status(502).end();
+    res.set("Content-Type", r.headers.get("content-type") || "application/octet-stream");
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Cache-Control", "public, max-age=86400");
+    const { Readable } = await import("node:stream");
+    Readable.fromWeb(r.body).pipe(res);
+  } catch {
     res.status(502).end();
   }
 });
