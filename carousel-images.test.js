@@ -80,20 +80,52 @@ test("client deduplicates artwork and does not save base64 onto slide records", 
   const a = { imagePrompt: "eye" }, b = { imagePrompt: "eye" };
   await Promise.all([load(a), load(b)]);
   assert.equal(calls, 1);
-  assert.equal(a._imageSource, "ai");
-  assert.equal(b._imageSource, "ai");
+  assert.equal(a._imageSource, undefined);
+  assert.equal(b._imageSource, undefined);
   assert.equal(a._img, undefined);
 });
 
-test("client retries free throttling and identifies stock fallbacks", async () => {
+test("manual AI throttling fails promptly without sleeping or replacing stock", async () => {
   let calls = 0;
-  const load = client(async () => ++calls === 1
-    ? new Response("busy", { status: 429, headers: { "Retry-After": "46" } })
-    : Response.json({ url: "https://images.pexels.com/test.jpg", generated: false, fallback: true }));
-  const slide = { imagePrompt: "eye" };
-  await load(slide);
-  assert.equal(calls, 2);
-  assert.equal(slide._imageSource, "stock");
+  const load = client(async () => {
+    calls++;
+    return new Response("busy", { status: 429, headers: { "Retry-After": "46" } });
+  });
+  const slide = { imagePrompt: "eye", _img: "stock.jpg" };
+  await assert.rejects(load(slide), /46 seconds/);
+  assert.equal(calls, 1);
+  assert.equal(slide._img, "stock.jpg");
+});
+
+test("initial carousel image loading uses stock even when an AI prompt exists", async () => {
+  const calls = [];
+  const context = vm.createContext({
+    fetch: async (url) => { calls.push(url); return Response.json({ url: "stock.jpg" }); },
+    passHeaders: () => ({}), AbortSignal, setTimeout,
+  });
+  vm.runInContext(source.slice(source.indexOf("const slideImgCache"), source.indexOf("function loadImageEl(")), context);
+  const slide = { imagePrompt: "a dramatic eye", imageQuery: "spotlight stage" };
+  assert.equal(await context.loadSlideImage(slide), "stock.jpg");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /^\/api\/slide-image\?/);
+});
+
+test("AI selection is used by rendering without issuing another generation request", async () => {
+  let calls = 0;
+  const context = vm.createContext({ fetch: async () => { calls++; throw new Error("Unexpected fetch"); }, passHeaders: () => ({}), AbortSignal, setTimeout });
+  vm.runInContext(source.slice(source.indexOf("const slideImgCache"), source.indexOf("function loadImageEl(")), context);
+  context.slide = { imageQuery: "camera", imagePrompt: "eye", _img: "stock.jpg" };
+  vm.runInContext('carouselSelectedArt.set(slide, "ai.jpg")', context);
+  assert.equal(await context.loadSlideImage(context.slide), "ai.jpg");
+  assert.equal(calls, 0);
+  vm.runInContext("carouselSelectedArt.delete(slide)", context);
+  assert.equal(await context.loadSlideImage(context.slide), "stock.jpg");
+  assert.equal(calls, 0);
+});
+
+test("an unexpected stock response cannot replace an image during manual AI generation", async () => {
+  const load = client(async () => Response.json({ url: "stock.jpg", generated: false }));
+  await assert.rejects(load({ imagePrompt: "eye", _img: "original.jpg" }), /current photo is unchanged/);
 });
 
 test("client allows retry after a failed generation rather than caching failure", async () => {

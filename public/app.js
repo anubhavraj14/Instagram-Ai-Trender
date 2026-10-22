@@ -550,6 +550,9 @@ function buildPlanCard(d) {
 
 /* ---------- carousels: slide PNG rendering + export ---------- */
 function wrapLines(ctx, text, maxW) {
+  if (String(text || "").includes("\n")) {
+    return String(text).split("\n").flatMap((line) => line.trim() ? wrapLines(ctx, line, maxW) : [""]);
+  }
   const words = String(text || "").split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
@@ -577,43 +580,36 @@ function pumpSlideQueue() {
 }
 
 const carouselArtCache = new Map();
-let carouselArtQueue = Promise.resolve();
+const carouselSelectedArt = new WeakMap();
 
 function loadCarouselArtwork(slide) {
-  const payload = { prompt: slide.imagePrompt, direction: slide.artDirection || "", query: slide.imageQuery || "" };
+  const payload = { prompt: slide.imagePrompt, direction: slide.artDirection || "" };
   const key = JSON.stringify(payload);
   if (!carouselArtCache.has(key)) {
-    const request = carouselArtQueue.then(async () => {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const response = await fetch("/api/carousel-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...passHeaders() },
-          body: key,
-          signal: AbortSignal.timeout(100000),
-        });
-        if (response.status === 429 && attempt < 4) {
-          const delay = Number(response.headers.get("Retry-After")) || 46;
-          await new Promise((resolve) => setTimeout(resolve, Math.min(120, Math.max(5, delay)) * 1000));
-          continue;
-        }
-        if (!response.ok) throw new Error("Artwork unavailable. Retry the slide; no paid service was used.");
-        const result = await response.json();
-        if (!result.url) throw new Error("No artwork returned");
-        return result;
+    const request = (async () => {
+      const response = await fetch("/api/carousel-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...passHeaders() },
+        body: key,
+        signal: AbortSignal.timeout(95000),
+      });
+      if (response.status === 429) {
+        const delay = Math.max(1, Number(response.headers.get("Retry-After")) || 46);
+        throw new Error(`Free AI is busy. Try again in ${delay} seconds. Your current photo is unchanged.`);
       }
-    });
-    carouselArtQueue = request.catch(() => {});
+      if (!response.ok) throw new Error("Artwork unavailable. Your current photo is unchanged; try again later.");
+      const result = await response.json();
+      if (!result.generated || !result.url) throw new Error("AI did not return artwork. Your current photo is unchanged.");
+      return result.url;
+    })();
     carouselArtCache.set(key, request);
     request.catch(() => carouselArtCache.delete(key));
   }
-  return carouselArtCache.get(key).then((result) => {
-    slide._imageSource = result.generated ? "ai" : "stock";
-    return result.url;
-  });
+  return carouselArtCache.get(key);
 }
 
 function loadSlideImage(slide) {
-  if (slide.imagePrompt) return loadCarouselArtwork(slide);
+  if (carouselSelectedArt.has(slide)) return Promise.resolve(carouselSelectedArt.get(slide));
   const q = (slide.imageQuery || "").trim();
   if (!q) return Promise.resolve(null);
   if (slide._img !== undefined) return Promise.resolve(slide._img);
@@ -622,29 +618,40 @@ function loadSlideImage(slide) {
   if (!slideImgCache.has(cacheKey)) {
     slideImgCache.set(cacheKey, new Promise((res) => {
       slideImgQueue.push(() =>
-        fetch(`/api/slide-image?q=${encodeURIComponent(q)}&mood=${encodeURIComponent(mood)}`)
+        fetch(`/api/slide-image?q=${encodeURIComponent(q)}&mood=${encodeURIComponent(mood)}`, { signal: AbortSignal.timeout(15000) })
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
-            slide._img = d?.url || null;
-            slide._credit = d?.photographer || null;
-            res(slide._img);
+            if ((slide.imageQuery || "").trim() === q) slide._credit = d?.photographer || null;
+            res(d?.url || null);
           })
-          .catch(() => { slide._img = null; res(null); })
+          .catch(() => res(null))
       );
       pumpSlideQueue();
     }));
   }
-  return slideImgCache.get(cacheKey);
+  return slideImgCache.get(cacheKey).then((url) => {
+    if ((slide.imageQuery || "").trim() !== q || (slide.imageMood || "").trim() !== mood) return loadSlideImage(slide);
+    if (url) slide._img = url;
+    else { delete slide._img; slideImgCache.delete(cacheKey); }
+    return url;
+  });
 }
 
+const slideImageElements = new Map();
 function loadImageEl(src) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // pollinations sends ACAO:* — keeps canvas exportable
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
+  if (!slideImageElements.has(src)) {
+    const request = new Promise((res, rej) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous"; // pollinations sends ACAO:* — keeps canvas exportable
+      const timer = setTimeout(() => { img.src = ""; rej(new Error("Image loading timed out")); }, 15000);
+      img.onload = () => { clearTimeout(timer); res(img); };
+      img.onerror = () => { clearTimeout(timer); rej(new Error("Image could not be loaded")); };
+      img.src = src;
+    });
+    slideImageElements.set(src, request);
+    request.catch(() => slideImageElements.delete(src));
+  }
+  return slideImageElements.get(src);
 }
 
 async function slideCanvas(slide, i, total) {
@@ -665,8 +672,10 @@ async function slideCanvas(slide, i, total) {
       const scale = Math.max(W / img.width, H / img.height);
       const dw = img.width * scale, dh = img.height * scale;
       ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      delete slide._imageLoadFailed;
     } catch { /* keep dark bg */
-      if (slide.imagePrompt) throw new Error("Artwork could not be loaded. Retry this slide.");
+      slide._imageLoadFailed = true;
+      if (carouselSelectedArt.has(slide)) throw new Error("Artwork could not be loaded. Use the stock photo or retry AI.");
     }
   } else {
     // fallback: subtle branded gradient so the slide still looks designed
@@ -715,13 +724,14 @@ async function slideCanvas(slide, i, total) {
     hSize -= 4;
     measure();
   }
-  if (blockH > maxBlock) {
-    bSize = Math.max(14, 34 * maxBlock / blockH);
+  while (blockH > maxBlock && bSize > 14) {
+    bSize -= 2;
     ctx.font = `400 ${bSize}px Arial, sans-serif`;
     bLines = slide.body ? wrapLines(ctx, slide.body, maxW - 60) : [];
     bStep = bSize * 1.4;
     blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   }
+  if (blockH > maxBlock) throw new Error("Slide text is too long to fit. Shorten the text or remove extra line breaks.");
 
   // Anchor the WHOLE block (heading + body) so the last line's DESCENDERS
   // stay above the safe edge — blockH already includes heading + gap + body.
@@ -838,7 +848,41 @@ async function postToInstagram(c, btn) {
   }
 }
 
+function carouselDraftKey(c) {
+  if (!c._editKey) {
+    const identity = JSON.stringify([c.id, c.topic, c.title, (c.slides || []).map((s) => [s.heading, s.body])]);
+    let hash = 2166136261;
+    for (const ch of identity) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619) >>> 0;
+    c._editKey = `carousel:${hash.toString(16)}`;
+  }
+  return c._editKey;
+}
+
+function restoreCarouselDraft(c) {
+  const draft = editsMap[carouselDraftKey(c)];
+  if (!draft) return;
+  (c.slides || []).forEach((slide, i) => {
+    for (const field of ["heading", "body", "imageQuery", "imageMood", "imagePrompt"]) {
+      if (typeof draft.slides?.[i]?.[field] === "string") slide[field] = draft.slides[i][field];
+    }
+  });
+  if (typeof draft.caption === "string") c.caption = draft.caption;
+  if (Array.isArray(draft.hashtags)) c.hashtags = draft.hashtags;
+}
+
+async function saveCarouselDraft(c) {
+  editsMap[carouselDraftKey(c)] = {
+    slides: (c.slides || []).map((s) => Object.fromEntries(
+      ["heading", "body", "imageQuery", "imageMood", "imagePrompt"].map((field) => [field, s[field] || ""])
+    )),
+    caption: c.caption || "", hashtags: c.hashtags || [],
+  };
+  await persistEdits();
+  persistIfSaved(c.id, c);
+}
+
 function buildCarouselCard(c) {
+  restoreCarouselDraft(c);
   (c.slides || []).forEach((slide) => {
     slide.artDirection = c.artDirection || slide.artDirection || "surreal cinematic photography, obsidian black and warm amber, luminous highlights";
     slide.imagePrompt ||= `Create an unexpected visual metaphor for this creator lesson: ${slide.heading || c.topic || ""}. ${slide.body || ""}. Use ${slide.imageQuery || "a sculptural object"} as a starting point, transformed by impossible scale and dramatic light. One hero subject in the lower half, dark negative space above. No generic laptop users or stock-photo poses.`;
@@ -859,47 +903,167 @@ function buildCarouselCard(c) {
   const strip = node.querySelector(".slide-strip");
   const imageNote = document.createElement("p");
   imageNote.className = "subtle carousel-image-note";
-  imageNote.textContent = "Custom AI artwork · free, queued generation · small provider logo · stock fallback is labelled. Keep this tab open while slides are prepared.";
+  imageNote.textContent = "Stock photos load by default. Generate AI artwork only for slides you choose; your current image stays visible while it runs. Free AI can be busy and includes a small provider logo. Text edits are saved; AI image selection lasts for this session.";
   strip.before(imageNote);
   (c.slides || []).forEach((s, i) => {
-    const t = document.createElement("div");
-    t.className = "slide-thumb " + (s.type || "point");
-    t.innerHTML = `
-      <div class="st-imgwrap"><div class="st-shimmer"></div></div>
-      <span class="st-art-status" role="status">Queued for custom artwork…</span>
-      <button class="st-retry hidden" type="button">Retry AI artwork</button>
-      <button class="st-dl" type="button" title="Download this slide" disabled>↓</button>`;
-    t.setAttribute("aria-label", `Slide ${i + 1}: ${s.heading || ""}. ${s.body || ""}`);
-    const download = t.querySelector(".st-dl");
-    const status = t.querySelector(".st-art-status");
-    const retry = t.querySelector(".st-retry");
+    const item = document.createElement("section");
+    item.className = "carousel-slide";
+    item.innerHTML = `
+      <div class="slide-thumb ${esc(s.type || "point")}">
+        <div class="st-imgwrap"><div class="st-shimmer"></div></div>
+        <button class="st-dl" type="button" title="Download this slide" disabled>↓</button>
+      </div>
+      <p class="slide-image-status" role="status">Loading stock photo…</p>
+      <div class="slide-image-actions">
+        <button class="copy-btn slide-ai" type="button">Generate AI image</button>
+        <button class="copy-btn slide-stock" type="button">Use stock photo</button>
+      </div>
+      <details class="slide-editor">
+        <summary>Edit slide ${i + 1}${i === 0 ? " / cover hook" : ""}</summary>
+        <div class="slide-hook-options"></div>
+        <label>Headline<input class="slide-heading" maxlength="160" /></label>
+        <label>Supporting text<textarea class="slide-body" rows="4" maxlength="800"></textarea></label>
+        <label>Stock photo search<input class="slide-query" maxlength="200" /></label>
+        <label>AI image prompt<textarea class="slide-prompt" rows="3" maxlength="1800"></textarea></label>
+        <button class="copy-btn slide-apply" type="button">Apply & save changes</button>
+        <p class="slide-edit-status" role="status"></p>
+      </details>`;
+    const t = item.querySelector(".slide-thumb");
+    const download = item.querySelector(".st-dl");
+    const status = item.querySelector(".slide-image-status");
+    const ai = item.querySelector(".slide-ai");
+    const stock = item.querySelector(".slide-stock");
+    const editStatus = item.querySelector(".slide-edit-status");
+    const fields = Object.fromEntries([ ["heading", ".slide-heading"], ["body", ".slide-body"],
+      ["imageQuery", ".slide-query"], ["imagePrompt", ".slide-prompt"]
+    ].map(([field, selector]) => [field, item.querySelector(selector)]));
+    Object.entries(fields).forEach(([field, input]) => { input.value = s[field] || ""; });
+    let revision = 0;
+    let generating = false;
     const render = async () => {
-      download.disabled = true;
-      retry.classList.add("hidden");
-      status.textContent = "Creating custom artwork · free queue…";
+      const version = ++revision;
       try {
         const canvas = await slideCanvas(s, i, c.slides.length);
+        if (version !== revision) return;
         canvas.style.cssText = "width:100%;height:100%;display:block";
         t.querySelector(".st-imgwrap").replaceChildren(canvas);
-        status.textContent = s._imageSource === "ai" ? "AI artwork" : "Stock fallback · AI unavailable";
-        retry.classList.toggle("hidden", s._imageSource === "ai");
+        t.setAttribute("aria-label", `Slide ${i + 1}: ${s.heading || ""}. ${s.body || ""}`);
+        if (!generating) status.textContent = carouselSelectedArt.has(s) ? "AI artwork selected" : s._img && !s._imageLoadFailed ? "Stock photo" : "Stock photo unavailable · try another search";
         download.disabled = false;
-      } catch {
-        status.textContent = "Artwork unavailable · retry below";
-        retry.classList.remove("hidden");
+      } catch (error) {
+        if (version === revision) status.textContent = error.message;
       }
     };
-    retry.addEventListener("click", () => {
-      carouselArtCache.delete(JSON.stringify({ prompt: s.imagePrompt, direction: s.artDirection || "", query: s.imageQuery || "" }));
+    const apply = async () => {
+      if (!fields.heading.value.trim()) throw new Error("Please enter a headline.");
+      const queryChanged = s.imageQuery !== fields.imageQuery.value.trim();
+      Object.entries(fields).forEach(([field, input]) => { s[field] = input.value.trim(); });
+      if (queryChanged) {
+        delete s._img;
+        carouselSelectedArt.delete(s);
+        slideImgCache.delete(`${s.imageQuery}|${s.imageMood || ""}`);
+      }
+      await saveCarouselDraft(c);
+      editStatus.textContent = "Changes saved. Preview and downloads use this text.";
+      await render();
+    };
+    item.querySelector(".slide-apply").addEventListener("click", () => apply().catch((error) => { editStatus.textContent = error.message; }));
+    ai.addEventListener("click", async () => {
+      if (generating) return;
+      generating = true;
+      ai.disabled = true;
+      stock.disabled = true;
+      status.textContent = "Generating AI for this slide only · current image kept…";
+      try {
+        await apply();
+        const url = await loadCarouselArtwork(s);
+        await loadImageEl(url);
+        carouselSelectedArt.set(s, url);
+        generating = false;
+        await render();
+      } catch (error) {
+        status.textContent = error.name === "TimeoutError" ? "AI timed out. Your current photo is unchanged." : error.message;
+      } finally {
+        generating = false;
+        ai.disabled = false;
+        stock.disabled = false;
+      }
+    });
+    stock.addEventListener("click", () => {
+      carouselSelectedArt.delete(s);
+      if (!s._img) {
+        delete s._img;
+        slideImgCache.delete(`${s.imageQuery || ""}|${s.imageMood || ""}`);
+      }
       render();
     });
+    if (i === 0) {
+      const hooks = item.querySelector(".slide-hook-options");
+      const showHooks = (options) => {
+        hooks.replaceChildren();
+        (Array.isArray(options) ? options : []).forEach((hook) => {
+          if (typeof hook?.heading !== "string" || !hook.heading.trim()) return;
+          const button = document.createElement("button");
+          button.className = "copy-btn";
+          button.type = "button";
+          button.textContent = hook.heading;
+          button.addEventListener("click", () => {
+            fields.heading.value = hook.heading;
+            fields.body.value = hook.body || "";
+            editStatus.textContent = "Hook selected. Apply & save to update the cover.";
+          });
+          hooks.appendChild(button);
+        });
+      };
+      showHooks(c.hookOptions);
+      const improve = document.createElement("button");
+      improve.className = "copy-btn";
+      improve.type = "button";
+      improve.textContent = "Suggest better cover hooks";
+      hooks.before(improve);
+      improve.addEventListener("click", async () => {
+        improve.disabled = true;
+        editStatus.textContent = "Writing hooks based on this topic and the actual slide content…";
+        try {
+          const response = await fetch("/api/carousel-hooks", {
+            method: "POST", headers: { "Content-Type": "application/json", ...passHeaders() },
+            body: JSON.stringify({ topic: c.topic || c.title, slides: c.slides.slice(1).map((slide) => ({ heading: slide.heading, body: slide.body })) }),
+            signal: AbortSignal.timeout(90000),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Could not generate hooks");
+          showHooks(result.hooks);
+          editStatus.textContent = "Choose a hook, edit if needed, then Apply & save.";
+        } catch (error) { editStatus.textContent = error.message; }
+        finally { improve.disabled = false; }
+      });
+    }
     download.addEventListener("click", () => downloadSlide(c, i).catch((error) => alert(error.message)));
-    strip.appendChild(t);
+    strip.appendChild(item);
     render();
   });
 
   node.querySelector(".s-caption").textContent = c.caption || "";
   node.querySelector(".s-hashtags").textContent = (c.hashtags || []).join("  ");
+  const captionEditor = document.createElement("details");
+  captionEditor.className = "slide-editor carousel-caption-editor";
+  captionEditor.innerHTML = `<summary>Edit caption & hashtags</summary>
+    <label>Caption<textarea class="carousel-caption-input" rows="5" maxlength="2200"></textarea></label>
+    <label>Hashtags<input class="carousel-tags-input" maxlength="600" /></label>
+    <button class="copy-btn" type="button">Save caption</button><p role="status"></p>`;
+  captionEditor.querySelector("textarea").value = c.caption || "";
+  captionEditor.querySelector("input").value = (c.hashtags || []).join(" ");
+  captionEditor.querySelector("button").addEventListener("click", async () => {
+    c.caption = captionEditor.querySelector("textarea").value.trim();
+    c.hashtags = captionEditor.querySelector("input").value.split(/[\s,]+/).filter(Boolean).map((tag) => tag.startsWith("#") ? tag : `#${tag}`);
+    try {
+      await saveCarouselDraft(c);
+      card.querySelector(".s-caption").textContent = c.caption;
+      card.querySelector(".s-hashtags").textContent = c.hashtags.join("  ");
+      captionEditor.querySelector("p").textContent = "Caption saved. Copy and share use these changes.";
+    } catch (error) { captionEditor.querySelector("p").textContent = error.message; }
+  });
+  node.querySelector(".script-caption").before(captionEditor);
   node.querySelector(".dl-btn").addEventListener("click", () => downloadSlides(c).catch((error) => alert(error.message)));
   node.querySelector(".ig-btn").addEventListener("click", (e) => postToInstagram(c, e.currentTarget));
   node.querySelector(".cap-btn").addEventListener("click", (e) => copyText(e, carouselCaptionText(c)));
@@ -999,7 +1163,7 @@ function renderPlan(data) {
 
 function renderCarousels(data) {
   const imgNotice = hasImages ? "" :
-    `<p class="notice">Custom carousel artwork uses a free AI service—no image API key needed. A Pexels key is optional for stock fallback when AI generation is unavailable.</p>`;
+    `<p class="notice">Stock photos need a Pexels key. AI images are optional: click Generate AI image on a specific slide. No AI requests run automatically.</p>`;
   $("#carouselStatus").innerHTML = imgNotice + liveNotice(data) +
     (data.summary ? `<p class="summary">${esc(data.summary)}</p>` : "");
   const cards = $("#carouselCards");

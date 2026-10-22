@@ -3,7 +3,7 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { researchTrends, researchViral, researchPlan, researchCarousels, planScriptKit } from "./lib/gemini.js";
+import { researchTrends, researchViral, researchPlan, researchCarousels, planScriptKit, generateJson } from "./lib/gemini.js";
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
 import { mediaConfig } from "./lib/media.js";
 import { buildCarouselImagePrompt, generateFreeCarouselImage } from "./lib/carouselImages.js";
@@ -14,7 +14,7 @@ import { probeMedia, extractAudio } from "./lib/editor.js";
 import busboy from "busboy";
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_NICHE } from "./lib/prompt.js";
+import { DEFAULT_NICHE, buildCarouselHookPrompt } from "./lib/prompt.js";
 import { getSavedList, setSavedList, getCache, setCache, getEditsMap, setEditsMap, getHistoryList, setHistoryList, getSeriesList, setSeriesList, storageMode } from "./lib/storage.js";
 import {
   createSeries,
@@ -178,11 +178,29 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
+app.post("/api/carousel-hooks", requirePass, async (req, res) => {
+  const topic = String(req.body?.topic || "").trim().slice(0, 500);
+  const slides = Array.isArray(req.body?.slides) ? req.body.slides.slice(0, 12).map((slide) => ({
+    heading: String(slide?.heading || "").slice(0, 160),
+    body: String(slide?.body || "").slice(0, 800),
+  })) : [];
+  if (!topic || !slides.length) return res.status(400).json({ error: "Provide a topic and slide content.", code: "BAD_REQUEST" });
+  try {
+    const result = await generateJson(buildCarouselHookPrompt(topic, slides));
+    const hooks = (Array.isArray(result.hooks) ? result.hooks : []).filter((hook) =>
+      typeof hook?.heading === "string" && hook.heading.trim() && typeof hook.body === "string"
+    ).slice(0, 3).map((hook) => ({ heading: hook.heading.trim().slice(0, 160), body: hook.body.trim().slice(0, 300) }));
+    if (!hooks.length) throw new Error("No usable hooks returned. Please try again.");
+    res.json({ hooks });
+  } catch (error) {
+    res.status(error.code === "NO_API_KEY" ? 400 : 500).json({ error: error.message, code: error.code || "HOOKS_FAILED" });
+  }
+});
+
 const carouselImageInflight = new Map();
 app.post("/api/carousel-image", requirePass, async (req, res) => {
   const prompt = String(req.body?.prompt || "").trim().slice(0, 1800);
   const direction = String(req.body?.direction || "").trim().slice(0, 600);
-  const query = String(req.body?.query || "").trim().slice(0, 200);
   if (!prompt) return res.status(400).json({ error: "Missing artwork prompt", code: "BAD_QUERY" });
   const fullPrompt = buildCarouselImagePrompt({ prompt, direction });
   const key = "carousel-art-v1:" + createHash("sha256").update(fullPrompt).digest("hex");
@@ -203,10 +221,6 @@ app.post("/api/carousel-image", requirePass, async (req, res) => {
     if (error.code === "IMAGE_BUSY") {
       res.set("Retry-After", String(error.retryAfter));
       return res.status(429).json({ error: error.message, code: error.code });
-    }
-    if (query && hasPexelsKey()) {
-      const fallback = await searchPexelsImage(query, { mood: "dark" }).catch(() => null);
-      if (fallback?.url) return res.json({ ...fallback, source: "pexels", generated: false, fallback: true });
     }
     res.status(503).json({ error: "Free artwork generation is unavailable. Retry this slide shortly.", code: "IMAGE_UNAVAILABLE" });
   }

@@ -408,16 +408,22 @@ h1 { font-size: 17.5px; margin: 0; letter-spacing: -0.02em; font-weight: 800; }
   backdrop-filter: blur(4px);
 }
 .carousel-image-note { font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
-.st-art-status {
-  position: absolute; top: 32px; left: 12px; right: 12px; z-index: 2;
-  width: fit-content; max-width: calc(100% - 24px); padding: 4px 8px;
-  color: #fff; background: rgba(0,0,0,.7); border-radius: 6px; font-size: 10px;
+.carousel-slide { flex: 0 0 min(320px, 78vw); min-width: 0; scroll-snap-align: start; }
+.carousel-slide .slide-thumb { width: 100%; }
+.slide-image-status, .slide-edit-status { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 8px 0; }
+.slide-image-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.slide-image-actions .copy-btn, .slide-editor .copy-btn { white-space: normal; text-align: left; }
+.slide-image-actions button:disabled { opacity: .5; cursor: wait; }
+.slide-editor { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+.slide-editor summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.slide-editor label { display: block; margin: 12px 0; font-size: 12px; color: var(--muted); }
+.slide-editor input, .slide-editor textarea {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 5px; padding: 9px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit;
 }
-.st-retry {
-  position: absolute; bottom: 48px; left: 12px; z-index: 3;
-  color: #fff; background: #24344d; border: 1px solid rgba(255,255,255,.4);
-  padding: 7px 10px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 11px;
-}
+.slide-editor textarea { resize: vertical; line-height: 1.5; }
+.slide-hook-options { display: grid; gap: 6px; margin: 10px 0; }
+.carousel-caption-editor { margin-bottom: 16px; }
 .st-dl:disabled { opacity: .3; cursor: wait; }
 .slide-thumb:hover .st-dl { opacity: 1; }
 .st-dl:hover { background: rgba(0,0,0,.85); border-color: var(--accent); }

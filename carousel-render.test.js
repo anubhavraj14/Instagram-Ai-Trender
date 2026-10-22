@@ -53,6 +53,18 @@ test("legacy longer copy is not silently truncated", async () => {
   assert.equal(text.filter((t) => t.font.startsWith("400")).map((t) => t.value).join(" "), body);
 });
 
+test("edited cover text and manual line breaks render without losing words", async () => {
+  const { draw, text } = renderer();
+  await draw({ type: "cover", heading: "Tumhara intro hi viewers bhaga raha hai", body: "Result pehle dikhao.\nIntro baad mein." }, 0, 6);
+  assert.equal(text.filter((t) => t.font.startsWith("400")).map((t) => t.value).join("\n"), "Result pehle dikhao.\nIntro baad mein.");
+  assert.ok(text.every((t) => t.y > 0 && t.y < 1350));
+});
+
+test("unrenderable edited text fails explicitly rather than clipping silently", async () => {
+  const { draw } = renderer();
+  await assert.rejects(draw({ heading: "Cover", body: "line\n".repeat(100) }, 0, 6), /too long to fit/);
+});
+
 test("batch carousel prompt uses cinematic direction and stock-search keywords", () => {
   const prompt = buildCarouselPrompt("creators", []);
   assert.match(prompt, /cinematic editorial posters/);
