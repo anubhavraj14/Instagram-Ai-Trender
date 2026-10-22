@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { researchTrends, researchViral, researchPlan, researchCarousels, planScriptKit } from "./lib/gemini.js";
 import { searchPexelsImage, searchPexelsVideo, hasPexelsKey } from "./lib/pexels.js";
 import { mediaConfig } from "./lib/media.js";
+import { buildCarouselImagePrompt, generateFreeCarouselImage } from "./lib/carouselImages.js";
 import { resolveKitMedia } from "./lib/kit.js";
 import { transcribeAudio, hasWhisperKey } from "./lib/whisper.js";
 import { planEdit } from "./lib/gemini.js";
@@ -174,6 +175,40 @@ app.post("/api/generate", async (req, res) => {
     const status = err.code === "NO_API_KEY" || err.code === "BAD_TYPE" ? 400 : 500;
     if (status >= 500) console.error(`generate/${type} failed:`, err.message);
     res.status(status).json({ error: err.message, code: err.code || "GENERATE_FAILED" });
+  }
+});
+
+const carouselImageInflight = new Map();
+app.post("/api/carousel-image", requirePass, async (req, res) => {
+  const prompt = String(req.body?.prompt || "").trim().slice(0, 1800);
+  const direction = String(req.body?.direction || "").trim().slice(0, 600);
+  const query = String(req.body?.query || "").trim().slice(0, 200);
+  if (!prompt) return res.status(400).json({ error: "Missing artwork prompt", code: "BAD_QUERY" });
+  const fullPrompt = buildCarouselImagePrompt({ prompt, direction });
+  const key = "carousel-art-v1:" + createHash("sha256").update(fullPrompt).digest("hex");
+  try {
+    const cached = await getCache(key).catch(() => null);
+    if (cached?.url) return res.json({ ...cached, cached: true });
+    if (!carouselImageInflight.has(key)) {
+      carouselImageInflight.set(key, generateFreeCarouselImage(fullPrompt)
+        .then(async (out) => {
+          await setCache(key, out).catch(() => {});
+          return out;
+        })
+        .finally(() => carouselImageInflight.delete(key)));
+    }
+    const out = await carouselImageInflight.get(key);
+    res.json({ ...out, cached: false });
+  } catch (error) {
+    if (error.code === "IMAGE_BUSY") {
+      res.set("Retry-After", String(error.retryAfter));
+      return res.status(429).json({ error: error.message, code: error.code });
+    }
+    if (query && hasPexelsKey()) {
+      const fallback = await searchPexelsImage(query, { mood: "dark" }).catch(() => null);
+      if (fallback?.url) return res.json({ ...fallback, source: "pexels", generated: false, fallback: true });
+    }
+    res.status(503).json({ error: "Free artwork generation is unavailable. Retry this slide shortly.", code: "IMAGE_UNAVAILABLE" });
   }
 });
 

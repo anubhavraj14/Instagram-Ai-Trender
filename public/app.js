@@ -576,7 +576,44 @@ function pumpSlideQueue() {
   }
 }
 
+const carouselArtCache = new Map();
+let carouselArtQueue = Promise.resolve();
+
+function loadCarouselArtwork(slide) {
+  const payload = { prompt: slide.imagePrompt, direction: slide.artDirection || "", query: slide.imageQuery || "" };
+  const key = JSON.stringify(payload);
+  if (!carouselArtCache.has(key)) {
+    const request = carouselArtQueue.then(async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const response = await fetch("/api/carousel-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...passHeaders() },
+          body: key,
+          signal: AbortSignal.timeout(100000),
+        });
+        if (response.status === 429 && attempt < 4) {
+          const delay = Number(response.headers.get("Retry-After")) || 46;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(120, Math.max(5, delay)) * 1000));
+          continue;
+        }
+        if (!response.ok) throw new Error("Artwork unavailable. Retry the slide; no paid service was used.");
+        const result = await response.json();
+        if (!result.url) throw new Error("No artwork returned");
+        return result;
+      }
+    });
+    carouselArtQueue = request.catch(() => {});
+    carouselArtCache.set(key, request);
+    request.catch(() => carouselArtCache.delete(key));
+  }
+  return carouselArtCache.get(key).then((result) => {
+    slide._imageSource = result.generated ? "ai" : "stock";
+    return result.url;
+  });
+}
+
 function loadSlideImage(slide) {
+  if (slide.imagePrompt) return loadCarouselArtwork(slide);
   const q = (slide.imageQuery || "").trim();
   if (!q) return Promise.resolve(null);
   if (slide._img !== undefined) return Promise.resolve(slide._img);
@@ -628,7 +665,9 @@ async function slideCanvas(slide, i, total) {
       const scale = Math.max(W / img.width, H / img.height);
       const dw = img.width * scale, dh = img.height * scale;
       ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
-    } catch { /* keep dark bg */ }
+    } catch { /* keep dark bg */
+      if (slide.imagePrompt) throw new Error("Artwork could not be loaded. Retry this slide.");
+    }
   } else {
     // fallback: subtle branded gradient so the slide still looks designed
     const bg = ctx.createLinearGradient(0, 0, 0, H);
@@ -642,8 +681,8 @@ async function slideCanvas(slide, i, total) {
   // bottom scrim so the minimal text stays readable on any image
   const scrim = ctx.createLinearGradient(0, 0, 0, H);
   scrim.addColorStop(0, "rgba(2,18,42,0.78)");
-  scrim.addColorStop(0.48, "rgba(3,19,40,0.55)");
-  scrim.addColorStop(0.72, "rgba(3,12,25,0.12)");
+  scrim.addColorStop(0.48, "rgba(3,12,25,0.24)");
+  scrim.addColorStop(0.72, "rgba(3,12,25,0)");
   scrim.addColorStop(1, "rgba(0,0,0,0.92)");
   ctx.fillStyle = scrim;
   ctx.fillRect(0, 0, W, H);
@@ -800,6 +839,10 @@ async function postToInstagram(c, btn) {
 }
 
 function buildCarouselCard(c) {
+  (c.slides || []).forEach((slide) => {
+    slide.artDirection = c.artDirection || slide.artDirection || "surreal cinematic photography, obsidian black and warm amber, luminous highlights";
+    slide.imagePrompt ||= `Create an unexpected visual metaphor for this creator lesson: ${slide.heading || c.topic || ""}. ${slide.body || ""}. Use ${slide.imageQuery || "a sculptural object"} as a starting point, transformed by impossible scale and dramatic light. One hero subject in the lower half, dark negative space above. No generic laptop users or stock-photo poses.`;
+  });
   const node = $("#carouselTpl").content.cloneNode(true);
   const card = node.querySelector(".card");
   node.querySelector(".goal-badge").textContent = c.goal ? `🎯 ${c.goal}` : "";
@@ -814,28 +857,50 @@ function buildCarouselCard(c) {
   else music.remove();
 
   const strip = node.querySelector(".slide-strip");
+  const imageNote = document.createElement("p");
+  imageNote.className = "subtle carousel-image-note";
+  imageNote.textContent = "Custom AI artwork · free, queued generation · small provider logo · stock fallback is labelled. Keep this tab open while slides are prepared.";
+  strip.before(imageNote);
   (c.slides || []).forEach((s, i) => {
     const t = document.createElement("div");
     t.className = "slide-thumb " + (s.type || "point");
     t.innerHTML = `
       <div class="st-imgwrap"><div class="st-shimmer"></div></div>
-      <button class="st-dl" type="button" title="Download this slide">↓</button>`;
+      <span class="st-art-status" role="status">Queued for custom artwork…</span>
+      <button class="st-retry hidden" type="button">Retry AI artwork</button>
+      <button class="st-dl" type="button" title="Download this slide" disabled>↓</button>`;
     t.setAttribute("aria-label", `Slide ${i + 1}: ${s.heading || ""}. ${s.body || ""}`);
-    t.querySelector(".st-dl").addEventListener("click", () => downloadSlide(c, i));
-    strip.appendChild(t);
-    slideCanvas(s, i, c.slides.length).then((canvas) => {
-      canvas.style.cssText = "width:100%;height:100%;display:block";
-      t.querySelector(".st-imgwrap").replaceChildren(canvas);
-    }).catch(() => {
-      const wrap = t.querySelector(".st-imgwrap");
-      wrap.textContent = s.heading || "Preview unavailable";
-      wrap.classList.add("st-fallback");
+    const download = t.querySelector(".st-dl");
+    const status = t.querySelector(".st-art-status");
+    const retry = t.querySelector(".st-retry");
+    const render = async () => {
+      download.disabled = true;
+      retry.classList.add("hidden");
+      status.textContent = "Creating custom artwork · free queue…";
+      try {
+        const canvas = await slideCanvas(s, i, c.slides.length);
+        canvas.style.cssText = "width:100%;height:100%;display:block";
+        t.querySelector(".st-imgwrap").replaceChildren(canvas);
+        status.textContent = s._imageSource === "ai" ? "AI artwork" : "Stock fallback · AI unavailable";
+        retry.classList.toggle("hidden", s._imageSource === "ai");
+        download.disabled = false;
+      } catch {
+        status.textContent = "Artwork unavailable · retry below";
+        retry.classList.remove("hidden");
+      }
+    };
+    retry.addEventListener("click", () => {
+      carouselArtCache.delete(JSON.stringify({ prompt: s.imagePrompt, direction: s.artDirection || "", query: s.imageQuery || "" }));
+      render();
     });
+    download.addEventListener("click", () => downloadSlide(c, i).catch((error) => alert(error.message)));
+    strip.appendChild(t);
+    render();
   });
 
   node.querySelector(".s-caption").textContent = c.caption || "";
   node.querySelector(".s-hashtags").textContent = (c.hashtags || []).join("  ");
-  node.querySelector(".dl-btn").addEventListener("click", () => downloadSlides(c));
+  node.querySelector(".dl-btn").addEventListener("click", () => downloadSlides(c).catch((error) => alert(error.message)));
   node.querySelector(".ig-btn").addEventListener("click", (e) => postToInstagram(c, e.currentTarget));
   node.querySelector(".cap-btn").addEventListener("click", (e) => copyText(e, carouselCaptionText(c)));
   wireSave(node.querySelector(".save-btn"), { id: c.id, type: "carousel", title: c.title, data: c });
@@ -934,7 +999,7 @@ function renderPlan(data) {
 
 function renderCarousels(data) {
   const imgNotice = hasImages ? "" :
-    `<p class="notice">🖼️ Slide photos need a free Pexels API key. Add <code>PEXELS_API_KEY</code> to your .env (get one at pexels.com/api) and refresh — until then slides use plain gradients.</p>`;
+    `<p class="notice">Custom carousel artwork uses a free AI service—no image API key needed. A Pexels key is optional for stock fallback when AI generation is unavailable.</p>`;
   $("#carouselStatus").innerHTML = imgNotice + liveNotice(data) +
     (data.summary ? `<p class="summary">${esc(data.summary)}</p>` : "");
   const cards = $("#carouselCards");

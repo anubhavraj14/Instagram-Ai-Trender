@@ -56,6 +56,9 @@ test("legacy longer copy is not silently truncated", async () => {
 test("batch carousel prompt uses cinematic direction and stock-search keywords", () => {
   const prompt = buildCarouselPrompt("creators", []);
   assert.match(prompt, /cinematic editorial posters/);
+  assert.match(prompt, /CUSTOM AI ARTWORK/);
+  assert.match(prompt, /"imagePrompt"/);
+  assert.match(prompt, /"artDirection"/);
   assert.match(prompt, /not image-generation instructions/);
   assert.doesNotMatch(prompt, /each slide is a full-bleed REAL PHOTO/);
 });
