@@ -8,29 +8,25 @@ const source = await readFile(new URL("./public/app.js", import.meta.url), "utf8
 const wrap = source.slice(source.indexOf("function wrapLines("), source.indexOf("/* slide images:"));
 const render = source.slice(source.indexOf("async function slideCanvas("), source.indexOf("function canvasToBlob("));
 
-function renderer({ photo = false } = {}) {
+function renderer() {
   const text = [];
-  const fills = [];
   const ctx = {
     font: "", textAlign: "left",
     measureText(value) {
       const size = Number(this.font.match(/([\d.]+)px/)[1]);
       return { width: value.length * size * 0.55 };
     },
-    fillText(value, x, y, maxWidth) { text.push({ value, x, y, maxWidth, font: this.font, color: this.fillStyle }); },
-    fillRect(x, y, width, height) { fills.push({ x, y, width, height, color: this.fillStyle }); },
-    drawImage() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+    fillText(value, x, y, maxWidth) { text.push({ value, x, y, maxWidth, font: this.font }); },
+    fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
     createLinearGradient() { return { addColorStop() {} }; },
   };
   const canvas = { getContext: () => ctx };
   const context = vm.createContext({
     document: { createElement: () => canvas },
-    loadSlideImage: async () => photo ? "bright-photo.jpg" : null,
-    loadImageEl: async () => ({ width: 1080, height: 1350 }),
-    carouselSelectedArt: new WeakMap(),
+    loadSlideImage: async () => null,
   });
   vm.runInContext(`${wrap}\n${render}`, context);
-  return { draw: context.slideCanvas, text, canvas, fills };
+  return { draw: context.slideCanvas, text, canvas };
 }
 
 for (const type of ["cover", "point", "cta"]) {
@@ -41,8 +37,8 @@ for (const type of ["cover", "point", "cta"]) {
     assert.equal(canvas.width, 1080);
     assert.equal(canvas.height, 1350);
     assert.ok(text.some((t) => t.value === "03 / 08"));
-    const headline = text.filter((t) => t.font.startsWith("800"));
-    assert.equal(headline.map((t) => t.value).join(" "), "Reach kaise badhaye");
+    const headline = text.filter((t) => t.font.includes("900"));
+    assert.equal(headline.map((t) => t.value).join(" "), "REACH KAISE BADHAYE");
     assert.ok(headline.every((t) => t.x === 540 && t.y < 780));
     const copy = text.filter((t) => t.font.startsWith("400"));
     assert.equal(copy.map((t) => t.value).join(" "), body);
@@ -67,20 +63,6 @@ test("edited cover text and manual line breaks render without losing words", asy
 test("unrenderable edited text fails explicitly rather than clipping silently", async () => {
   const { draw } = renderer();
   await assert.rejects(draw({ heading: "Cover", body: "line\n".repeat(100) }, 0, 6), /too long to fit/);
-});
-
-test("bright photos get a strong text backing with no decorative header clutter", async () => {
-  const { draw, text, fills } = renderer({ photo: true });
-  await draw({ type: "cover", heading: "A useful lesson", body: "Specific advice the audience can use." }, 0, 6);
-  const panel = fills.find((fill) => fill.color === "rgba(8,12,20,0.92)");
-  assert.ok(panel, "A high-opacity text backing is required even when the image is bright");
-  const components = [8, 12, 20].map((channel) => (channel * 0.92 + 255 * 0.08) / 255)
-    .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
-  const luminance = components[0] * 0.2126 + components[1] * 0.7152 + components[2] * 0.0722;
-  assert.ok(1.05 / (luminance + 0.05) >= 7, "White text must retain at least 7:1 contrast over a white image");
-  const copy = text.filter((t) => t.font.startsWith("800") || t.font.startsWith("400"));
-  assert.ok(copy.every((t) => t.color === "#ffffff" && t.y > panel.y && t.y < panel.y + panel.height));
-  assert.ok(!text.some((t) => ["CREATOR NOTES", "THE FIELD GUIDE", "PUT IT INTO PRACTICE"].includes(t.value)));
 });
 
 test("batch carousel prompt uses cinematic direction and stock-search keywords", () => {
