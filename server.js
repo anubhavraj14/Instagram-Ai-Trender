@@ -54,8 +54,7 @@ function requirePass(req, res, next) {
 // Persistent cache + request-coalescing wrapper.
 // Content is generated once and stored (in Upstash), then served on every visit —
 // even after the server sleeps/restarts. It ONLY regenerates when ?force=1 (Refresh button).
-function makeCachedRoute(name, worker) {
-  const key = name.toLowerCase();
+function makeCachedRoute(name, worker, key = name.toLowerCase()) {
   let inflight = null;
   return async (req, res) => {
     const force = req.query.force === "1";
@@ -101,7 +100,7 @@ app.get("/api/config", (_req, res) => {
 app.get("/api/trends", makeCachedRoute("Trends", researchTrends));
 app.get("/api/viral", makeCachedRoute("Viral", researchViral));
 app.get("/api/plan", makeCachedRoute("Plan", researchPlan));
-app.get("/api/carousels", makeCachedRoute("Carousels", researchCarousels));
+app.get("/api/carousels", makeCachedRoute("Carousels", researchCarousels, "carousels-v2"));
 
 // ---------- Script Kit ----------
 // Paste a script -> get a full pre-production asset pack: B-roll, BGM, SFX,

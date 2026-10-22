@@ -660,6 +660,7 @@ async function slideCanvas(slide, i, total) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   const type = slide.type || "point";
+  if (document.fonts?.ready) await document.fonts.ready;
 
   // full-bleed image (cover-crop to 4:5); dark fallback if it failed
   ctx.fillStyle = "#0b0d12";
@@ -705,17 +706,17 @@ async function slideCanvas(slide, i, total) {
 
   // Measure-then-place layout: wrap at the current size, shrink until the whole
   // text block fits inside the safe area — never let text overflow the canvas.
-  let hSize = type === "cover" ? 180 : 148;
+  let hSize = type === "cover" ? 112 : 88;
   let hLines, bLines, hStep, bStep, bSize, gap, blockH;
-  const heading = String(slide.heading || "").toUpperCase();
+  const heading = String(slide.heading || "");
   const measure = () => {
-    bSize = 34;
-    hStep = hSize * 0.94;
-    bStep = bSize * 1.4;
-    gap = 32;
-    ctx.font = `900 ${hSize}px "Arial Black", Arial, sans-serif`;
+    bSize = 40;
+    hStep = hSize * 1.12;
+    bStep = bSize * 1.45;
+    gap = 28;
+    ctx.font = `800 ${hSize}px Inter, Arial, sans-serif`;
     hLines = wrapLines(ctx, heading, maxW);
-    ctx.font = `400 ${bSize}px Arial, sans-serif`;
+    ctx.font = `400 ${bSize}px Inter, Arial, sans-serif`;
     bLines = slide.body ? wrapLines(ctx, slide.body, maxW - 60) : [];
     blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   };
@@ -724,11 +725,11 @@ async function slideCanvas(slide, i, total) {
     hSize -= 4;
     measure();
   }
-  while (blockH > maxBlock && bSize > 14) {
+  while (blockH > maxBlock && bSize > 24) {
     bSize -= 2;
-    ctx.font = `400 ${bSize}px Arial, sans-serif`;
+    ctx.font = `400 ${bSize}px Inter, Arial, sans-serif`;
     bLines = slide.body ? wrapLines(ctx, slide.body, maxW - 60) : [];
-    bStep = bSize * 1.4;
+    bStep = bSize * 1.45;
     blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   }
   if (blockH > maxBlock) throw new Error("Slide text is too long to fit. Shorten the text or remove extra line breaks.");
@@ -736,49 +737,36 @@ async function slideCanvas(slide, i, total) {
   // Anchor the WHOLE block (heading + body) so the last line's DESCENDERS
   // stay above the safe edge — blockH already includes heading + gap + body.
   const descender = Math.round((bLines.length ? bSize : hSize) * 0.3);
-  let y = Math.min(240, textBottom - descender - blockH);
+  let y = Math.min(200, textBottom - descender - blockH);
+  ctx.fillStyle = "rgba(8,12,20,0.92)";
+  ctx.fillRect(pad - 32, y - 32, maxW + 64, blockH + descender + 64);
+  ctx.fillRect(0, H - 110, W, 110);
   ctx.textAlign = "center";
-  ctx.font = `900 ${hSize}px "Arial Black", Arial, sans-serif`;
+  ctx.font = `800 ${hSize}px Inter, Arial, sans-serif`;
   ctx.fillStyle = "#ffffff";
   hLines.forEach((l) => { y += hStep; ctx.fillText(l, W / 2, y, maxW); });
   if (bLines.length) {
     y += gap;
-    ctx.font = `400 ${bSize}px Arial, sans-serif`;
-    ctx.fillStyle = "#edf0f5";
+    ctx.font = `400 ${bSize}px Inter, Arial, sans-serif`;
+    ctx.fillStyle = "#ffffff";
     bLines.forEach((l) => { y += bStep; ctx.fillText(l, W / 2, y, maxW); });
   }
-  ctx.font = "600 17px Arial, sans-serif";
+  ctx.font = "600 24px Inter, Arial, sans-serif";
   ctx.textAlign = "left";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText("CREATOR NOTES", pad, 78);
-  ctx.textAlign = "center";
-  ctx.fillText(type === "cover" ? "THE FIELD GUIDE" : type === "cta" ? "YOUR NEXT MOVE" : "PUT IT INTO PRACTICE", W / 2, 78);
-  ctx.textAlign = "right";
-  ctx.fillText(`${String(i + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, W - pad, 78);
-  ctx.strokeStyle = "rgba(255,255,255,0.6)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad, H - 100);
-  ctx.lineTo(W - pad, H - 100);
-  ctx.stroke();
-  ctx.textAlign = "left";
-  ctx.fillText(type === "cta" ? "SAVE THIS GUIDE" : "KEEP GOING", pad, H - 60);
-  ctx.textAlign = "center";
-  for (let n = 0; n < total; n++) {
-    ctx.fillStyle = n === i ? "#ffffff" : "rgba(255,255,255,0.35)";
-    ctx.fillText(String(n + 1).padStart(2, "0"), W / 2 + (n - (total - 1) / 2) * 44, H - 60);
+  ctx.fillText(`${String(i + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, pad, H - 48);
+  if (type !== "cover") {
+    ctx.textAlign = "right";
+    ctx.fillText(type === "cta" ? "Save this guide" : "Next →", W - pad, H - 48);
   }
-  ctx.textAlign = "right";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(type === "cta" ? "REVISIT ↺" : "NEXT →", W - pad, H - 60);
   ctx.textAlign = "left";
 
   // cover gets the swipe cue, pinned inside its own reserved space
   if (type === "cover") {
-    ctx.font = "500 20px Arial, sans-serif";
+    ctx.font = "600 24px Inter, Arial, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "right";
-    ctx.fillText("SWIPE TO EXPLORE →", W - pad, H - 130);
+    ctx.fillText("Swipe to read →", W - pad, H - 48);
     ctx.textAlign = "left";
   }
 
