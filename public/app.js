@@ -640,9 +640,11 @@ async function slideCanvas(slide, i, total) {
   }
 
   // bottom scrim so the minimal text stays readable on any image
-  const scrim = ctx.createLinearGradient(0, H * 0.5, 0, H);
-  scrim.addColorStop(0, "rgba(6,8,12,0)");
-  scrim.addColorStop(1, "rgba(6,8,12,0.88)");
+  const scrim = ctx.createLinearGradient(0, 0, 0, H);
+  scrim.addColorStop(0, "rgba(2,18,42,0.78)");
+  scrim.addColorStop(0.48, "rgba(3,19,40,0.55)");
+  scrim.addColorStop(0.72, "rgba(3,12,25,0.12)");
+  scrim.addColorStop(1, "rgba(0,0,0,0.92)");
   ctx.fillStyle = scrim;
   ctx.fillRect(0, 0, W, H);
 
@@ -650,50 +652,84 @@ async function slideCanvas(slide, i, total) {
   const SAFE_BOTTOM = 100;   // nothing may render below H - SAFE_BOTTOM
   const SAFE_TOP = 140;      // keep clear of the counter pill zone
   const swipeSpace = type === "cover" ? 90 : 0;
-  const textBottom = H - SAFE_BOTTOM - swipeSpace;
+  const textBottom = Math.min(780, H - SAFE_BOTTOM - swipeSpace);
   const maxBlock = textBottom - SAFE_TOP;
 
   // Measure-then-place layout: wrap at the current size, shrink until the whole
   // text block fits inside the safe area — never let text overflow the canvas.
-  let hSize = type === "cover" ? 96 : 76;
+  let hSize = type === "cover" ? 180 : 148;
   let hLines, bLines, hStep, bStep, bSize, gap, blockH;
+  const heading = String(slide.heading || "").toUpperCase();
   const measure = () => {
-    bSize = Math.max(30, Math.round(hSize * 0.55));
-    hStep = hSize * 1.12;
-    bStep = bSize * 1.35;
-    gap = 30;
-    ctx.font = `800 ${hSize}px Inter, system-ui, sans-serif`;
-    hLines = wrapLines(ctx, slide.heading || "", maxW).slice(0, 4);
-    ctx.font = `500 ${bSize}px Inter, system-ui, sans-serif`;
-    bLines = slide.body ? wrapLines(ctx, slide.body, maxW).slice(0, 4) : [];
+    bSize = 34;
+    hStep = hSize * 0.94;
+    bStep = bSize * 1.4;
+    gap = 32;
+    ctx.font = `900 ${hSize}px "Arial Black", Arial, sans-serif`;
+    hLines = wrapLines(ctx, heading, maxW);
+    ctx.font = `400 ${bSize}px Arial, sans-serif`;
+    bLines = slide.body ? wrapLines(ctx, slide.body, maxW - 60) : [];
     blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   };
   measure();
-  while ((hLines.length >= 4 || blockH > maxBlock) && hSize > 34) {
-    hSize -= 6;
+  while ((hLines.length > 3 || blockH > maxBlock) && hSize > 36) {
+    hSize -= 4;
     measure();
+  }
+  if (blockH > maxBlock) {
+    bSize = Math.max(14, 34 * maxBlock / blockH);
+    ctx.font = `400 ${bSize}px Arial, sans-serif`;
+    bLines = slide.body ? wrapLines(ctx, slide.body, maxW - 60) : [];
+    bStep = bSize * 1.4;
+    blockH = hLines.length * hStep + (bLines.length ? gap + bLines.length * bStep : 0);
   }
 
   // Anchor the WHOLE block (heading + body) so the last line's DESCENDERS
   // stay above the safe edge — blockH already includes heading + gap + body.
   const descender = Math.round((bLines.length ? bSize : hSize) * 0.3);
-  let y = textBottom - descender - blockH;
-  ctx.font = `800 ${hSize}px Inter, system-ui, sans-serif`;
+  let y = Math.min(240, textBottom - descender - blockH);
+  ctx.textAlign = "center";
+  ctx.font = `900 ${hSize}px "Arial Black", Arial, sans-serif`;
   ctx.fillStyle = "#ffffff";
-  hLines.forEach((l) => { y += hStep; ctx.fillText(l, pad, y); });
+  hLines.forEach((l) => { y += hStep; ctx.fillText(l, W / 2, y, maxW); });
   if (bLines.length) {
     y += gap;
-    ctx.font = `500 ${bSize}px Inter, system-ui, sans-serif`;
-    ctx.fillStyle = "#d7dcea";
-    bLines.forEach((l) => { y += bStep; ctx.fillText(l, pad, y); });
+    ctx.font = `400 ${bSize}px Arial, sans-serif`;
+    ctx.fillStyle = "#edf0f5";
+    bLines.forEach((l) => { y += bStep; ctx.fillText(l, W / 2, y, maxW); });
   }
+  ctx.font = "600 17px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("CREATOR NOTES", pad, 78);
+  ctx.textAlign = "center";
+  ctx.fillText(type === "cover" ? "THE FIELD GUIDE" : type === "cta" ? "YOUR NEXT MOVE" : "PUT IT INTO PRACTICE", W / 2, 78);
+  ctx.textAlign = "right";
+  ctx.fillText(`${String(i + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`, W - pad, 78);
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, H - 100);
+  ctx.lineTo(W - pad, H - 100);
+  ctx.stroke();
+  ctx.textAlign = "left";
+  ctx.fillText(type === "cta" ? "SAVE THIS GUIDE" : "KEEP GOING", pad, H - 60);
+  ctx.textAlign = "center";
+  for (let n = 0; n < total; n++) {
+    ctx.fillStyle = n === i ? "#ffffff" : "rgba(255,255,255,0.35)";
+    ctx.fillText(String(n + 1).padStart(2, "0"), W / 2 + (n - (total - 1) / 2) * 44, H - 60);
+  }
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(type === "cta" ? "REVISIT ↺" : "NEXT →", W - pad, H - 60);
+  ctx.textAlign = "left";
 
   // cover gets the swipe cue, pinned inside its own reserved space
   if (type === "cover") {
-    ctx.font = "700 42px Inter, system-ui, sans-serif";
-    ctx.fillStyle = "#22d3ee";
+    ctx.font = "500 20px Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
     ctx.textAlign = "right";
-    ctx.fillText("Swipe →", W - pad, H - 40);
+    ctx.fillText("SWIPE TO EXPLORE →", W - pad, H - 130);
     ctx.textAlign = "left";
   }
 
@@ -783,16 +819,17 @@ function buildCarouselCard(c) {
     t.className = "slide-thumb " + (s.type || "point");
     t.innerHTML = `
       <div class="st-imgwrap"><div class="st-shimmer"></div></div>
-      <div class="st-scrim"></div>
-      <span class="st-n">${i + 1}</span>
-      <p class="st-h">${esc(s.heading || "")}</p>
-      <button class="st-dl" type="button" title="Download this slide">⬇</button>`;
+      <button class="st-dl" type="button" title="Download this slide">↓</button>`;
+    t.setAttribute("aria-label", `Slide ${i + 1}: ${s.heading || ""}. ${s.body || ""}`);
     t.querySelector(".st-dl").addEventListener("click", () => downloadSlide(c, i));
     strip.appendChild(t);
-    loadSlideImage(s).then((url) => {
+    slideCanvas(s, i, c.slides.length).then((canvas) => {
+      canvas.style.cssText = "width:100%;height:100%;display:block";
+      t.querySelector(".st-imgwrap").replaceChildren(canvas);
+    }).catch(() => {
       const wrap = t.querySelector(".st-imgwrap");
-      if (url) wrap.innerHTML = `<img src="${url}" alt="" loading="lazy" />`;
-      else wrap.innerHTML = `<div class="st-fallback"></div>`;
+      wrap.textContent = s.heading || "Preview unavailable";
+      wrap.classList.add("st-fallback");
     });
   });
 

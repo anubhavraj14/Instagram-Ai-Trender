@@ -364,7 +364,7 @@ h1 { font-size: 17.5px; margin: 0; letter-spacing: -0.02em; font-weight: 800; }
   scroll-snap-type: x mandatory;
 }
 .slide-thumb {
-  flex: 0 0 160px; scroll-snap-align: start; position: relative;
+  flex: 0 0 min(320px, 78vw); scroll-snap-align: start; position: relative;
   aspect-ratio: 4 / 5; border: 1px solid var(--line); border-radius: 12px;
   overflow: hidden; background: var(--panel-2);
   transition: transform .18s ease, border-color .18s ease;
